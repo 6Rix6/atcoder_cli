@@ -29,8 +29,27 @@ fn extract_samples(html: &str) -> Vec<SampleInput> {
     let h3_selector = Selector::parse("h3").unwrap();
     let pre_selector = Selector::parse("pre").unwrap();
 
+    let body = Selector::parse("span.lang-ja")
+        .ok()
+        .and_then(|s| document.select(&s).next())
+        .or_else(|| {
+            Selector::parse("span.lang-en")
+                .ok()
+                .and_then(|s| document.select(&s).next())
+        })
+        .or_else(|| {
+            Selector::parse("div#task-statement")
+                .ok()
+                .and_then(|s| document.select(&s).next())
+        });
+
+    let Some(body) = body else {
+        return vec![];
+    };
+
+
     // Collect all .part elements whose h3 heading is a sample input or output
-    let sample_sections: Vec<ElementRef> = document
+    let sample_sections: Vec<ElementRef> = body
         .select(&part_selector)
         .filter(|el| {
             let heading = el
@@ -39,7 +58,11 @@ fn extract_samples(html: &str) -> Vec<SampleInput> {
                 .map(|h| h.text().collect::<String>())
                 .unwrap_or_default();
 
-            heading.contains("Sample Input") || heading.contains("Sample Output")
+            heading.contains("入力例")
+                || heading.contains("出力例")
+                || heading.contains("Sample Input")
+                || heading.contains("Sample Output")
+
         })
         .collect();
 
