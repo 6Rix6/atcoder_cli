@@ -47,7 +47,6 @@ fn extract_samples(html: &str) -> Vec<SampleInput> {
         return vec![];
     };
 
-
     // Collect all .part elements whose h3 heading is a sample input or output
     let sample_sections: Vec<ElementRef> = body
         .select(&part_selector)
@@ -62,7 +61,6 @@ fn extract_samples(html: &str) -> Vec<SampleInput> {
                 || heading.contains("出力例")
                 || heading.contains("Sample Input")
                 || heading.contains("Sample Output")
-
         })
         .collect();
 
@@ -91,7 +89,6 @@ fn extract_samples(html: &str) -> Vec<SampleInput> {
 
     samples
 }
-
 
 /// Generate a task URL from a task ID or full URL.
 pub fn generate_task_url(id_or_url: &str) -> Option<String> {
@@ -135,3 +132,4 @@ pub async fn get_samples(
     let samples = extract_samples(&html);
     Ok(samples)
 }
+

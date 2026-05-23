@@ -1,81 +1,19 @@
 use clap::Parser;
-use std::io::Write;
-use std::process::Command;
 
-use crate::scraper::generate_task_url;
-
-mod scraper;
-mod structs;
+mod cli;
+mod commands;
+mod utils;
 
 #[tokio::main]
 async fn main() {
-    let args = structs::Args::parse();
+    let args = cli::Cli::parse();
 
-    // TODO: add error handling
-    let toml_str = std::fs::read_to_string("atcoder.toml").unwrap();
-
-    let config: structs::Config = toml::from_str(&toml_str).expect("Failed to parse atcoder.toml");
-
-    let final_compiler = args.compiler.unwrap_or(config.compiler);
-    let final_flags = args.flags.unwrap_or(config.flags);
-    let final_run = args.run.unwrap_or(config.run);
-
-    let Some(task_url) = generate_task_url(&(args.task)) else {
-        eprintln!("Invalid task Url or Id.");
-        return;
-    };
-
-    println!("Compiling source...");
-    let compile_status = Command::new(&final_compiler)
-        .args(&final_flags)
-        .status()
-        .expect("Compile failed");
-
-    if !compile_status.success() {
-        eprintln!("Compile failed");
-        return;
-    }
-
-    let samples = scraper::get_samples(&task_url, None)
-        .await
-        .expect("Failed to fetch samples");
-
-    println!("Running {} sample(s)...\n", samples.len());
-
-    let mut passed = 0;
-
-    for (i, sample) in samples.iter().enumerate() {
-        let case_num = i + 1;
-        let input_data = sample.input.clone();
-        let expected_output = sample.output.clone();
-
-        let mut process = Command::new(&final_run)
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .spawn()
-            .expect("Failed to start");
-
-        if let Some(mut stdin) = process.stdin.take() {
-            stdin
-                .write_all(input_data.as_bytes())
-                .expect("Failed to write stdin");
+    match &args.command {
+        cli::Commands::Test { task_id } => {
+            commands::test::run(&task_id).await;
         }
-
-        let output = process.wait_with_output().expect("Failed to get output");
-        let actual_output = String::from_utf8_lossy(&output.stdout);
-
-        let actual_trimmed = actual_output.trim();
-        let expected_trimmed = expected_output.trim();
-
-        if actual_trimmed == expected_trimmed {
-            println!("Case #{}: AC", case_num);
-            passed += 1;
-        } else {
-            println!("Case #{}: WA", case_num);
-            println!("  Expected:\n{}", expected_trimmed);
-            println!("  Actual:\n{}", actual_trimmed);
+        cli::Commands::Auth { subcommand } => {
+            commands::auth::handle(&subcommand).await;
         }
     }
-
-    println!("\nResult: {}/{} passed", passed, samples.len());
 }

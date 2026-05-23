@@ -1,0 +1,23 @@
+use clap::{Parser, Subcommand};
+
+#[derive(Parser, Debug)]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Commands,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum Commands {
+    Test { task_id: String },
+    Auth {
+        #[command(subcommand)]
+        subcommand: AuthCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AuthCommands {
+    Login,
+    Logout,
+    Status,
+}
