@@ -1,4 +1,4 @@
-use reqwest::Client;
+use reqwest::{Client, Response, redirect::Policy};
 use scraper::{ElementRef, Html, Selector};
 
 #[derive(Debug, Clone)]
@@ -7,9 +7,12 @@ pub struct SampleInput {
     pub output: String,
 }
 
-/// Fetch HTML from the given URL, optionally with a session cookie.
-async fn fetch_html(url: &str, cookie: Option<&str>) -> Result<String, reqwest::Error> {
-    let client = Client::new();
+pub async fn fetch_page(
+    url: &str,
+    cookie: Option<&str>,
+) -> Result<Response, reqwest::Error> {
+    let client = Client::builder().redirect(Policy::none()).build()?;
+
     let mut request = client.get(url);
 
     if let Some(cookie_value) = cookie {
@@ -17,7 +20,14 @@ async fn fetch_html(url: &str, cookie: Option<&str>) -> Result<String, reqwest::
     }
 
     let response = request.send().await?;
+    Ok(response)
+}
+
+/// Fetch HTML from the given URL, optionally with a session cookie.
+async fn fetch_html(url: &str, cookie: Option<&str>) -> Result<String, reqwest::Error> {
+    let response = fetch_page(url, cookie).await?;
     let html = response.text().await?;
+
     Ok(html)
 }
 
@@ -132,4 +142,3 @@ pub async fn get_samples(
     let samples = extract_samples(&html);
     Ok(samples)
 }
-

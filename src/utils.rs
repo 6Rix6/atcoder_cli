@@ -1,2 +1,2 @@
-pub mod cookie;
+pub mod cookie_storage;
 pub mod scraper;

@@ -1,20 +1,87 @@
-use std::{io,io::Write};
+use std::path::PathBuf;
+use std::{io, io::Write};
 
 use crate::cli::AuthCommands;
+use crate::utils::cookie_storage;
+use crate::utils::scraper;
+
+const SESSION_KEY: &str = "REVAL_SESSION";
+
+fn get_cookie_path() -> PathBuf {
+    let mut config_path = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
+    config_path.push("atcoder-cli");
+    config_path.push("cookies.txt");
+
+    return config_path;
+}
 
 /// Handler for 'acc auth <subcommand>'
 pub async fn handle(subcommand: &AuthCommands) {
     match subcommand {
         AuthCommands::Login => {
-            request_user_input("REVAL_SESSION=");
+            let cookie = request_user_input("REVAL_SESSION=");
+
+            let path = get_cookie_path();
+            let storage = cookie_storage::CookieStorage::new(&path);
+            let result = storage.set(SESSION_KEY, &cookie);
+
+            match result {
+                Ok(_) => {
+                    println!("Saved cookie at: {}", path.to_string_lossy().into_owned())
+                }
+                Err(_) => {
+                    println!("Failed to save cookie. Try again.")
+                }
+            }
         }
         AuthCommands::Logout => {
             println!("Logging out from AtCoder...");
             // TODO: Add logout logic
         }
         AuthCommands::Status => {
-            println!("Checking authentication status...");
-            // TODO: Add status check logic
+            let path = get_cookie_path();
+
+            if !path.exists() || !path.is_file() {
+                println!("Cookie does not set. You can set one with `acc auth login`.");
+                return;
+            }
+
+            let storage = cookie_storage::CookieStorage::new(path);
+            let session_key = match storage.get(SESSION_KEY) {
+                Ok(Some(val)) => val,
+                Ok(None) => {
+                    println!("");
+                    return;
+                }
+                Err(e) => {
+                    eprintln!("An error occurred: {}", e);
+                    return;
+                }
+            };
+
+            match scraper::fetch_page(
+                "https://atcoder.jp/contests/abc001/submit",
+                Some(&session_key),
+            )
+            .await
+            {
+                Ok(response) => {
+                    if response.status().is_success() {
+                        println!("OK");
+                        return;
+                    }
+
+                    if response.status().is_redirection() {
+                        println!("NG");
+                        return;
+                    }
+
+                    println!("Received other status code: {}", response.status())
+                }
+                Err(e) => {
+                    eprintln!("Network error occurred: {}", e);
+                }
+            }
         }
     }
 }
@@ -28,4 +95,3 @@ fn request_user_input(message: &str) -> String {
         .expect("Failed to read line");
     input.trim().to_string()
 }
-
