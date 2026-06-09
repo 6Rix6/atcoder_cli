@@ -4,8 +4,6 @@ use crate::cli::AuthCommands;
 use crate::utils::cookie_storage;
 use crate::utils::scraper;
 
-const SESSION_KEY: &str = "REVAL_SESSION";
-
 /// Handler for 'acc auth <subcommand>'
 pub async fn handle(subcommand: &AuthCommands) {
     match subcommand {
@@ -14,7 +12,7 @@ pub async fn handle(subcommand: &AuthCommands) {
 
             let path = cookie_storage::get_cookie_path();
             let storage = cookie_storage::CookieStorage::new(&path);
-            let result = storage.set(SESSION_KEY, &cookie);
+            let result = storage.set(cookie_storage::SESSION_KEY, &cookie);
 
             match result {
                 Ok(_) => {
@@ -51,10 +49,10 @@ pub async fn handle(subcommand: &AuthCommands) {
             }
 
             let storage = cookie_storage::CookieStorage::new(path);
-            let session_key = match storage.get(SESSION_KEY) {
+            let session_key = match storage.get(cookie_storage::SESSION_KEY) {
                 Ok(Some(val)) => val,
                 Ok(None) => {
-                    println!("");
+                    println!("{} does not exists.",cookie_storage::SESSION_KEY);
                     return;
                 }
                 Err(e) => {

@@ -1,4 +1,4 @@
-use crate::utils::scraper;
+use crate::utils::{cookie_storage, scraper};
 use serde::Deserialize;
 use std::io::Write;
 use std::process::Command;
@@ -20,9 +20,9 @@ pub async fn run(task_id: &str) {
 
     let config: Config = toml::from_str(&toml_str).expect("Failed to parse atcoder.toml");
 
-    let final_compiler = config.compiler; // args.compiler.unwrap_or(config.compiler);
-    let final_flags = config.flags; // args.flags.unwrap_or(config.flags);
-    let final_run = config.run; //args.run.unwrap_or(config.run);
+    let final_compiler = config.compiler;
+    let final_flags = config.flags;
+    let final_run = config.run;
 
     let Some(task_url) = scraper::generate_task_url(task_id) else {
         eprintln!("Invalid task Url or Id.");
@@ -40,7 +40,17 @@ pub async fn run(task_id: &str) {
         return;
     }
 
-    let samples = scraper::get_samples(&task_url, config.cookie.as_deref())
+    let cookie_path = cookie_storage::get_cookie_path();
+    let storage = cookie_storage::CookieStorage::new(cookie_path);
+
+    let cookie = config
+        .cookie
+        .or_else(|| match storage.get(cookie_storage::SESSION_KEY) {
+            Ok(Some(val)) => Some(val),
+            _ => None,
+        });
+
+    let samples = scraper::get_samples(&task_url, cookie.as_deref())
         .await
         .expect("Failed to fetch samples");
 
