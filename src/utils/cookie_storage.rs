@@ -3,6 +3,15 @@ use std::fs::{self, File};
 use std::io::{self, Write, BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
+pub fn get_cookie_path() -> PathBuf {
+    let mut config_path = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
+    config_path.push("atcoder-cli");
+    config_path.push("cookies.txt");
+
+    return config_path;
+}
+
+
 pub struct CookieStorage {
     file_path: PathBuf,
 }

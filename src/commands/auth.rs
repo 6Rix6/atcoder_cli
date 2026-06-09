@@ -1,5 +1,4 @@
-use std::path::PathBuf;
-use std::{io, io::Write};
+use std::{fs, io, io::Write};
 
 use crate::cli::AuthCommands;
 use crate::utils::cookie_storage;
@@ -7,21 +6,13 @@ use crate::utils::scraper;
 
 const SESSION_KEY: &str = "REVAL_SESSION";
 
-fn get_cookie_path() -> PathBuf {
-    let mut config_path = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
-    config_path.push("atcoder-cli");
-    config_path.push("cookies.txt");
-
-    return config_path;
-}
-
 /// Handler for 'acc auth <subcommand>'
 pub async fn handle(subcommand: &AuthCommands) {
     match subcommand {
         AuthCommands::Login => {
             let cookie = request_user_input("REVAL_SESSION=");
 
-            let path = get_cookie_path();
+            let path = cookie_storage::get_cookie_path();
             let storage = cookie_storage::CookieStorage::new(&path);
             let result = storage.set(SESSION_KEY, &cookie);
 
@@ -35,11 +26,24 @@ pub async fn handle(subcommand: &AuthCommands) {
             }
         }
         AuthCommands::Logout => {
-            println!("Logging out from AtCoder...");
-            // TODO: Add logout logic
+            let path = cookie_storage::get_cookie_path();
+
+            if !path.exists() {
+                println!("Cookie does not set.");
+                return;
+            }
+
+            match fs::remove_file(path) {
+                Ok(_) => {
+                    println!("Cookie removed.");
+                }
+                Err(e) => {
+                    eprintln!("Failed to remove cookie: {}", e);
+                }
+            };
         }
         AuthCommands::Status => {
-            let path = get_cookie_path();
+            let path = cookie_storage::get_cookie_path();
 
             if !path.exists() || !path.is_file() {
                 println!("Cookie does not set. You can set one with `acc auth login`.");
