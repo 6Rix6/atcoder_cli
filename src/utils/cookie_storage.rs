@@ -3,8 +3,6 @@ use std::fs::{self, File};
 use std::io::{self, Write, BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
-pub const SESSION_KEY: &str = "REVAL_SESSION";
-
 pub fn get_cookie_path() -> PathBuf {
     let mut config_path = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
     config_path.push("atcoder-cli");

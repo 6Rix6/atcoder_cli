@@ -1,7 +1,10 @@
-use crate::utils::{cookie_storage, scraper};
 use serde::Deserialize;
 use std::io::Write;
 use std::process::Command;
+
+use crate::constants::REVEL_SESSION;
+use crate::utils::atcoder_client::{self, AtCoderClient};
+use crate::utils::cookie_storage::{self, CookieStorage};
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
@@ -14,8 +17,8 @@ pub struct Config {
 /// Handler for 'acc test <task_id>'
 pub async fn run(task_id: &str) {
     println!("Running tests for task: {}", task_id);
-    // TODO: Add compilation and testing logic here
 
+    // TODO: add error handling
     let toml_str = std::fs::read_to_string("atcoder.toml").unwrap();
 
     let config: Config = toml::from_str(&toml_str).expect("Failed to parse atcoder.toml");
@@ -23,11 +26,6 @@ pub async fn run(task_id: &str) {
     let final_compiler = config.compiler;
     let final_flags = config.flags;
     let final_run = config.run;
-
-    let Some(task_url) = scraper::generate_task_url(task_id) else {
-        eprintln!("Invalid task Url or Id.");
-        return;
-    };
 
     println!("Compiling source...");
     let compile_status = Command::new(&final_compiler)
@@ -41,16 +39,24 @@ pub async fn run(task_id: &str) {
     }
 
     let cookie_path = cookie_storage::get_cookie_path();
-    let storage = cookie_storage::CookieStorage::new(cookie_path);
+    let storage = CookieStorage::new(cookie_path);
 
     let cookie = config
         .cookie
-        .or_else(|| match storage.get(cookie_storage::SESSION_KEY) {
+        .or_else(|| match storage.get(REVEL_SESSION) {
             Ok(Some(val)) => Some(val),
             _ => None,
         });
 
-    let samples = scraper::get_samples(&task_url, cookie.as_deref())
+    let Some(task_url) = atcoder_client::generate_task_url(task_id) else {
+        eprintln!("Invalid task Url or Id.");
+        return;
+    };
+
+    let client = AtCoderClient::new(cookie);
+
+    let samples = client
+        .get_samples(&task_url)
         .await
         .expect("Failed to fetch samples");
 

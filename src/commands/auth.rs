@@ -1,8 +1,9 @@
 use std::{fs, io, io::Write};
 
 use crate::cli::AuthCommands;
+use crate::constants::REVEL_SESSION;
+use crate::utils::atcoder_client::AtCoderClient;
 use crate::utils::cookie_storage;
-use crate::utils::scraper;
 
 /// Handler for 'acc auth <subcommand>'
 pub async fn handle(subcommand: &AuthCommands) {
@@ -12,7 +13,7 @@ pub async fn handle(subcommand: &AuthCommands) {
 
             let path = cookie_storage::get_cookie_path();
             let storage = cookie_storage::CookieStorage::new(&path);
-            let result = storage.set(cookie_storage::SESSION_KEY, &cookie);
+            let result = storage.set(REVEL_SESSION, &cookie);
 
             match result {
                 Ok(_) => {
@@ -49,10 +50,10 @@ pub async fn handle(subcommand: &AuthCommands) {
             }
 
             let storage = cookie_storage::CookieStorage::new(path);
-            let session_key = match storage.get(cookie_storage::SESSION_KEY) {
-                Ok(Some(val)) => val,
+            let cookie = match storage.get(REVEL_SESSION) {
+                Ok(Some(val)) => Some(val),
                 Ok(None) => {
-                    println!("{} does not exists.",cookie_storage::SESSION_KEY);
+                    println!("{} does not exists.", REVEL_SESSION);
                     return;
                 }
                 Err(e) => {
@@ -61,11 +62,11 @@ pub async fn handle(subcommand: &AuthCommands) {
                 }
             };
 
-            match scraper::fetch_page(
-                "https://atcoder.jp/contests/abc001/submit",
-                Some(&session_key),
-            )
-            .await
+            let client = AtCoderClient::new(cookie);
+
+            match client
+                .fetch_page("https://atcoder.jp/contests/abc001/submit")
+                .await
             {
                 Ok(response) => {
                     if response.status().is_success() {
