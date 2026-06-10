@@ -1,52 +1,51 @@
-use serde::Deserialize;
 use std::io::Write;
 use std::process::Command;
 
 use crate::constants::REVEL_SESSION;
 use crate::utils::atcoder_client::{self, AtCoderClient};
+use crate::utils::config;
 use crate::utils::cookie_storage::{self, CookieStorage};
-
-#[derive(Deserialize, Debug)]
-pub struct Config {
-    pub compiler: String,
-    pub flags: Vec<String>,
-    pub run: String,
-    pub cookie: Option<String>,
-}
 
 /// Handler for 'acc test <task_id>'
 pub async fn run(task_id: &str) {
     println!("Running tests for task: {}", task_id);
 
-    // TODO: add error handling
-    let toml_str = std::fs::read_to_string("atcoder.toml").unwrap();
+    let config = match config::load_config() {
+        Ok(Some(config)) => config,
+        Ok(None) => {
+            eprintln!("No config file found.");
+            std::process::exit(1);
+        }
+        Err(e) => {
+            eprintln!("Error: {e}");
+            std::process::exit(1);
+        }
+    };
 
-    let config: Config = toml::from_str(&toml_str).expect("Failed to parse atcoder.toml");
+    if let Some(compiler) = config.compiler {
+        println!("Compiling source...");
 
-    let final_compiler = config.compiler;
-    let final_flags = config.flags;
-    let final_run = config.run;
+        let empty_flags = Vec::new();
+        let flags = config.compiler_flags.as_ref().unwrap_or(&empty_flags);
 
-    println!("Compiling source...");
-    let compile_status = Command::new(&final_compiler)
-        .args(&final_flags)
-        .status()
-        .expect("Compile failed");
+        let compile_status = Command::new(&compiler)
+            .args(flags)
+            .status()
+            .expect("Compile failed");
 
-    if !compile_status.success() {
-        eprintln!("Compile failed");
-        return;
+        if !compile_status.success() {
+            eprintln!("Compile failed");
+            return;
+        }
     }
 
     let cookie_path = cookie_storage::get_cookie_path();
     let storage = CookieStorage::new(cookie_path);
 
-    let cookie = config
-        .cookie
-        .or_else(|| match storage.get(REVEL_SESSION) {
-            Ok(Some(val)) => Some(val),
-            _ => None,
-        });
+    let cookie = config.cookie.or_else(|| match storage.get(REVEL_SESSION) {
+        Ok(Some(val)) => Some(val),
+        _ => None,
+    });
 
     let Some(task_url) = atcoder_client::generate_task_url(task_id) else {
         eprintln!("Invalid task Url or Id.");
@@ -64,12 +63,16 @@ pub async fn run(task_id: &str) {
 
     let mut passed = 0;
 
+    let empty_flags = Vec::new();
+    let run_flags = config.run_flags.as_ref().unwrap_or(&empty_flags);
+
     for (i, sample) in samples.iter().enumerate() {
         let case_num = i + 1;
         let input_data = sample.input.clone();
         let expected_output = sample.output.clone();
 
-        let mut process = Command::new(&final_run)
+        let mut process = Command::new(&config.run)
+            .args(run_flags)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .spawn()
