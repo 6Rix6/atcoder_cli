@@ -1,16 +1,36 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use thiserror::Error;
 
 use crate::constants::{CONFIG_DIR_NAME, CONFIG_FILE_NAME};
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
     pub compiler: Option<String>,
     pub compiler_flags: Option<Vec<String>>,
     pub run: String,
     pub run_flags: Option<Vec<String>>,
     pub cookie: Option<String>,
+}
+
+pub struct ConfigRef {
+    pub compiler: Option<&'static str>,
+    pub compiler_flags: Option<&'static [&'static str]>,
+    pub run: &'static str,
+    pub run_flags: Option<&'static [&'static str]>,
+    pub cookie: Option<&'static str>,
+}
+
+impl From<&ConfigRef> for Config {
+    fn from(r: &ConfigRef) -> Self {
+        Config {
+            compiler: r.compiler.map(str::to_string),
+            compiler_flags: r.compiler_flags.map(|f| f.iter().map(|s| s.to_string()).collect()),
+            run: r.run.to_string(),
+            run_flags: r.run_flags.map(|f| f.iter().map(|s| s.to_string()).collect()),
+            cookie: r.cookie.map(str::to_string),
+        }
+    }
 }
 
 #[derive(Debug, Error)]
@@ -26,6 +46,18 @@ pub enum ConfigError {
         path: PathBuf,
         #[source]
         source: toml::de::Error,
+    },
+    #[error("Failed to write config file '{path}': {source}")]
+    Write {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("Failed to serialize config file '{path}': {source}")]
+    Serialize {
+        path: PathBuf,
+        #[source]
+        source: toml::ser::Error,
     },
 }
 
@@ -65,4 +97,35 @@ pub fn load_config() -> Result<Option<Config>, ConfigError> {
     } else {
         Ok(None)
     }
+}
+
+pub fn create_config(config: Config) -> Result<PathBuf, ConfigError> {
+    let config_dir = dirs::config_dir()
+        .ok_or_else(|| ConfigError::Write {
+            path: PathBuf::from(CONFIG_DIR_NAME),
+            source: std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Could not determine config directory",
+            ),
+        })?
+        .join(CONFIG_DIR_NAME);
+
+    std::fs::create_dir_all(&config_dir).map_err(|e| ConfigError::Write {
+        path: config_dir.clone(),
+        source: e,
+    })?;
+
+    let config_path = config_dir.join(CONFIG_FILE_NAME);
+
+    let content = toml::to_string_pretty(&config).map_err(|e| ConfigError::Serialize {
+        path: config_path.clone(),
+        source: e,
+    })?;
+
+    std::fs::write(&config_path, content).map_err(|e| ConfigError::Write {
+        path: config_path.clone(),
+        source: e,
+    })?;
+
+    Ok(config_path)
 }

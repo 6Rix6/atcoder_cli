@@ -13,6 +13,7 @@ pub enum Commands {
         #[command(subcommand)]
         subcommand: AuthCommands,
     },
+    Init
 }
 
 #[derive(Subcommand, Debug)]
