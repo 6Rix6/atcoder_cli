@@ -9,6 +9,14 @@ pub struct SampleInput {
     pub output: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct TaskInfo {
+    pub url: String,
+    pub contest_id: String,
+    pub task_id: String,
+    pub task_char: String
+}
+
 /// A client dedicated to interacting with AtCoder.
 pub struct AtCoderClient {
     client: Client,
@@ -123,8 +131,7 @@ impl AtCoderClient {
     }
 }
 
-/// Generate a task URL from a task ID or full URL.
-pub fn generate_task_url(id_or_url: &str) -> Option<String> {
+pub fn get_task_info(id_or_url: &str) -> Option<TaskInfo> {
     let task_id = id_or_url
         .split('/')
         .filter(|s| !s.is_empty())
@@ -146,9 +153,19 @@ pub fn generate_task_url(id_or_url: &str) -> Option<String> {
     }
 
     let contest_id = parts[..parts.len() - 1].join("-");
+    let task_char = parts.last().unwrap();
 
-    Some(format!(
+    let url = format!(
         "https://atcoder.jp/contests/{}/tasks/{}",
-        contest_id, task_id
-    ))
+        &contest_id, &task_id
+    );
+
+    let info = TaskInfo {
+        url: url,
+        contest_id: contest_id,
+        task_id: task_id.to_string(),
+        task_char: task_char.to_string()
+    };
+
+    return Some(info);
 }
