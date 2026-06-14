@@ -2,48 +2,53 @@ use std::path::PathBuf;
 
 use crate::{
     config::{error::ConfigError, models::Config},
-    constants::{CONFIG_DIR_NAME, CONFIG_FILE_NAME},
-    styles,
+    constants::{CONFIG_DIR_NAME, CONFIG_FILE_NAME}
 };
 
-pub fn load_config() -> Result<Option<Config>, ConfigError> {
+pub fn load_local_config() -> Result<Option<Config>, ConfigError> {
     let local = PathBuf::from(CONFIG_FILE_NAME);
-    if local.exists() {
-        let toml_str = std::fs::read_to_string(&local).map_err(|e| ConfigError::Read {
-            path: local.clone(),
-            source: e,
-        })?;
+    load_config(local)
+}
 
-        match toml::from_str::<Config>(&toml_str) {
-            Ok(config) => return Ok(Some(config)),
-            Err(e) => {
-                eprintln!(
-                    "{}: Failed to parse {}: {}",
-                    styles::warn("Warning"),
-                    local.display(),
-                    e
-                );
-                println!("Continuing with global settings...");
-            }
-        }
-    }
+pub fn load_global_config() -> Result<Option<Config>, ConfigError> {
+    // let local = PathBuf::from(CONFIG_FILE_NAME);
+    // if local.exists() {
+    //     let toml_str = std::fs::read_to_string(&local).map_err(|e| ConfigError::Read {
+    //         path: local.clone(),
+    //         source: e,
+    //     })?;
+    //
+    //     match toml::from_str::<Config>(&toml_str) {
+    //         Ok(config) => return Ok(Some(config)),
+    //         Err(e) => {
+    //             eprintln!(
+    //                 "{}: Failed to parse {}: {}",
+    //                 styles::warn("Warning"),
+    //                 local.display(),
+    //                 e
+    //             );
+    //             println!("Continuing with global settings...");
+    //         }
+    //     }
+    // }
 
     let Some(global) = dirs::config_dir().map(|d| d.join(CONFIG_DIR_NAME).join(CONFIG_FILE_NAME))
     else {
         return Ok(None);
     };
 
-    if global.exists() {
-        let toml_str = std::fs::read_to_string(&global).map_err(|e| ConfigError::Read {
-            path: global.clone(),
+    load_config(global)
+}
+
+fn load_config(path: PathBuf) -> Result<Option<Config>, ConfigError> {
+    if path.exists() {
+        let toml_str = std::fs::read_to_string(&path).map_err(|e| ConfigError::Read {
+            path: path.clone(),
             source: e,
         })?;
         toml::from_str(&toml_str)
             .map(Some)
-            .map_err(|e| ConfigError::Parse {
-                path: global,
-                source: e,
-            })
+            .map_err(|e| ConfigError::Parse { path, source: e })
     } else {
         Ok(None)
     }

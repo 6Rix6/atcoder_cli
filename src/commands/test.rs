@@ -6,7 +6,7 @@ use console::{Term, style};
 
 use crate::{
     atcoder::{self, client::AtCoderClient, models::TaskInfo},
-    config,
+    config::{self, error::ConfigError, models::Config},
     constants::REVEL_SESSION,
     cookie::{self, storage::CookieStorage},
     styles,
@@ -19,7 +19,7 @@ pub async fn run(task_id: &str) {
         return;
     };
 
-    let config = match config::utils::load_config() {
+    let config = match load_config() {
         Ok(Some(config)) => config,
         Ok(None) => {
             eprintln!("{}", styles::error("No config file found."));
@@ -179,4 +179,16 @@ fn build_vars(task_info: &TaskInfo) -> HashMap<&'static str, &str> {
     vars.insert("TASK_CHAR", &task_info.task_char);
 
     vars
+}
+
+fn load_config() -> Result<Option<Config>, ConfigError> {
+    match config::utils::load_local_config() {
+        Ok(result) => return Ok(result),
+        Err(e) => {
+            eprintln!("{}: {}", styles::warn("Warning"), e);
+            println!("Continuing with global settings...");
+        }
+    }
+
+    config::utils::load_global_config()
 }
