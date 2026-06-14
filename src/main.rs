@@ -5,6 +5,7 @@ mod commands;
 mod constants;
 mod languages;
 mod utils;
+mod styles;
 
 use crate::cli::Commands;
 

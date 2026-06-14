@@ -57,6 +57,7 @@ name = "atcoder_cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "console",
  "dialoguer",
  "dirs",
  "reqwest",

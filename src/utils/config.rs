@@ -2,7 +2,10 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use thiserror::Error;
 
-use crate::constants::{CONFIG_DIR_NAME, CONFIG_FILE_NAME};
+use crate::{
+    constants::{CONFIG_DIR_NAME, CONFIG_FILE_NAME},
+    styles,
+};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
@@ -25,9 +28,13 @@ impl From<&ConfigRef> for Config {
     fn from(r: &ConfigRef) -> Self {
         Config {
             compiler: r.compiler.map(str::to_string),
-            compiler_flags: r.compiler_flags.map(|f| f.iter().map(|s| s.to_string()).collect()),
+            compiler_flags: r
+                .compiler_flags
+                .map(|f| f.iter().map(|s| s.to_string()).collect()),
             run: r.run.to_string(),
-            run_flags: r.run_flags.map(|f| f.iter().map(|s| s.to_string()).collect()),
+            run_flags: r
+                .run_flags
+                .map(|f| f.iter().map(|s| s.to_string()).collect()),
             cookie: r.cookie.map(str::to_string),
         }
     }
@@ -72,7 +79,12 @@ pub fn load_config() -> Result<Option<Config>, ConfigError> {
         match toml::from_str::<Config>(&toml_str) {
             Ok(config) => return Ok(Some(config)),
             Err(e) => {
-                eprintln!("Warning: Failed to parse {}: {}", local.display(), e);
+                eprintln!(
+                    "{}: Failed to parse {}: {}",
+                    styles::warn("Warning"),
+                    local.display(),
+                    e
+                );
                 println!("Continuing with global settings...");
             }
         }

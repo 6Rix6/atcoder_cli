@@ -1,37 +1,47 @@
 use std::collections::HashMap;
 use std::io::Write;
-use std::process::Command;
+use std::process::{Command, Stdio};
+
+use console::{Term, style};
 
 use crate::constants::REVEL_SESSION;
+use crate::styles;
 use crate::utils::atcoder_client::{self, AtCoderClient, TaskInfo};
 use crate::utils::config;
 use crate::utils::cookie_storage::{self, CookieStorage};
 
 /// Handler for 'acc test <task_id>'
 pub async fn run(task_id: &str) {
-    println!("Running tests for task: {}", task_id);
+    let Some(task_info) = atcoder_client::get_task_info(task_id) else {
+        eprintln!("{}", styles::error("Invalid task Url or Id."));
+        return;
+    };
 
     let config = match config::load_config() {
         Ok(Some(config)) => config,
         Ok(None) => {
-            eprintln!("No config file found.");
+            eprintln!("{}", styles::error("No config file found."));
             std::process::exit(1);
         }
         Err(e) => {
-            eprintln!("Error: {e}");
+            eprintln!("{}: {}", styles::error("Error"), e);
             std::process::exit(1);
         }
     };
 
-    let Some(task_info) = atcoder_client::get_task_info(task_id) else {
-        eprintln!("Invalid task Url or Id.");
-        return;
-    };
+    println!(
+        "{}: {}",
+        style("Running tests for task").bold().green().bright(),
+        task_id
+    );
+
+    let term = Term::stdout();
 
     let vars = build_vars(&task_info);
 
     if let Some(compiler_template) = config.compiler {
-        println!("Compiling source...");
+        term.write_line("Compiling source...").unwrap();
+
         let compiler = expand_template(&compiler_template, &vars);
 
         let flags: Vec<String> = config
@@ -44,13 +54,22 @@ pub async fn run(task_id: &str) {
 
         let compile_status = Command::new(&compiler)
             .args(flags)
+            .stdout(Stdio::null())
             .status()
             .expect("Compile failed");
 
+        // TODO: show stacktrace
         if !compile_status.success() {
             eprintln!("Compile failed");
             return;
         }
+
+        term.clear_last_lines(1).unwrap();
+        term.write_line(&format!(
+            "{}",
+            style("Compile finished").bold().green().bright()
+        ))
+        .unwrap();
     }
 
     let cookie_path = cookie_storage::get_cookie_path();
@@ -106,16 +125,26 @@ pub async fn run(task_id: &str) {
         let expected_trimmed = expected_output.trim();
 
         if actual_trimmed == expected_trimmed {
-            println!("Case #{}: AC", case_num);
+            println!("Case #{}: {}", case_num, style("AC").bold().green());
             passed += 1;
         } else {
-            println!("Case #{}: WA", case_num);
-            println!("  Expected:\n{}", expected_trimmed);
-            println!("  Actual:\n{}", actual_trimmed);
+            println!("Case #{}: {}", case_num, style("WA").bold().red());
+            println!("  {}:\n{}", style("Expected").dim(), expected_trimmed);
+            println!("  {}:\n{}", style("Actual").dim(), actual_trimmed);
         }
     }
 
-    println!("\nResult: {}/{} passed", passed, samples.len());
+    let result_style = if passed == samples.len() {
+        style(format!("{}/{} passed", passed, samples.len()))
+            .bold()
+            .green()
+    } else {
+        style(format!("{}/{} passed", passed, samples.len()))
+            .bold()
+            .yellow()
+    };
+
+    println!("\nResult: {}", result_style);
 }
 
 fn expand_template(template: &str, vars: &HashMap<&str, &str>) -> String {
@@ -128,7 +157,10 @@ fn expand_template(template: &str, vars: &HashMap<&str, &str>) -> String {
     while let Some(start) = rest.find("${") {
         if let Some(end) = rest[start..].find('}') {
             let var_name = &rest[start + 2..start + end];
-            eprintln!("Warning: unknown template variable '${{{}}}' in \"{}\"", var_name, template);
+            eprintln!(
+                "Warning: unknown template variable '${{{}}}' in \"{}\"",
+                var_name, template
+            );
             rest = &rest[start + end + 1..];
         } else {
             break;
