@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::io::Write;
-use std::process::{Command, Stdio};
 
 use console::{Term, style};
 
@@ -9,20 +7,21 @@ use crate::{
     config::{self, error::ConfigError, models::Config},
     constants::REVEL_SESSION,
     cookie::{self, storage::CookieStorage},
+    process::{compiler, runner},
     styles,
 };
 
 /// Handler for 'acc test <task_id>'
 pub async fn run(task_id: &str) {
     let Some(task_info) = atcoder::utils::get_task_info(task_id) else {
-        eprintln!("{}", styles::error("Invalid task Url or Id."));
-        return;
+        eprintln!("{}: Invalid task URL or ID.", styles::error("Error"));
+        std::process::exit(1);
     };
 
     let config = match load_config() {
         Ok(Some(config)) => config,
         Ok(None) => {
-            eprintln!("{}", styles::error("No config file found."));
+            eprintln!("{}: No config file found.", styles::error("Error"));
             std::process::exit(1);
         }
         Err(e) => {
@@ -31,11 +30,7 @@ pub async fn run(task_id: &str) {
         }
     };
 
-    println!(
-        "{}: {}",
-        style("Running tests for task").bold().green().bright(),
-        task_id
-    );
+    println!("{}: {}", styles::success("Running tests for task"), task_id);
 
     let term = Term::stdout();
 
@@ -44,9 +39,8 @@ pub async fn run(task_id: &str) {
     if let Some(compiler_template) = config.compiler {
         term.write_line("Compiling source...").unwrap();
 
-        let compiler = expand_template(&compiler_template, &vars);
-
-        let flags: Vec<String> = config
+        let compiler_command = expand_template(&compiler_template, &vars);
+        let compiler_flags: Vec<String> = config
             .compiler_flags
             .as_ref()
             .unwrap_or(&Vec::new())
@@ -54,24 +48,18 @@ pub async fn run(task_id: &str) {
             .map(|f| expand_template(f, &vars))
             .collect();
 
-        let compile_status = Command::new(&compiler)
-            .args(flags)
-            .stdout(Stdio::null())
-            .status()
-            .expect("Compile failed");
+        if let Err(e) = compiler::compile(&compiler_command, &compiler_flags) {
+            term.clear_last_lines(1).unwrap();
 
-        // TODO: show stacktrace
-        if !compile_status.success() {
-            eprintln!("Compile failed");
-            return;
+            eprintln!("{}", styles::error("Compile failed:"));
+            eprintln!("{}", e);
+
+            std::process::exit(1);
         }
 
         term.clear_last_lines(1).unwrap();
-        term.write_line(&format!(
-            "{}",
-            style("Compile finished").bold().green().bright()
-        ))
-        .unwrap();
+        term.write_line(&format!("{}", styles::success("Compile finished").bold()))
+            .unwrap();
     }
 
     let cookie_path = cookie::utils::get_cookie_path();
@@ -84,6 +72,7 @@ pub async fn run(task_id: &str) {
 
     let client = AtCoderClient::new(cookie);
 
+    // TODO: show error code
     let samples = client
         .get_samples(&task_info.url)
         .await
@@ -93,7 +82,7 @@ pub async fn run(task_id: &str) {
 
     let mut passed = 0;
 
-    let run = expand_template(&config.run, &vars);
+    let run_command = expand_template(&config.run, &vars);
     let run_flags: Vec<String> = config
         .run_flags
         .as_ref()
@@ -107,32 +96,40 @@ pub async fn run(task_id: &str) {
         let input_data = sample.input.clone();
         let expected_output = sample.output.clone();
 
-        let mut process = Command::new(&run)
-            .args(&run_flags)
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .spawn()
-            .expect("Failed to start");
+        match runner::run_case(&run_command, &run_flags, &input_data) {
+            Ok(result) => {
+                let actual_trimmed = result.output.trim();
+                let expected_trimmed = expected_output.trim();
 
-        if let Some(mut stdin) = process.stdin.take() {
-            stdin
-                .write_all(input_data.as_bytes())
-                .expect("Failed to write stdin");
-        }
+                let time_str = format!("({:?})", result.duration);
 
-        let output = process.wait_with_output().expect("Failed to get output");
-        let actual_output = String::from_utf8_lossy(&output.stdout);
-
-        let actual_trimmed = actual_output.trim();
-        let expected_trimmed = expected_output.trim();
-
-        if actual_trimmed == expected_trimmed {
-            println!("Case #{}: {}", case_num, style("AC").bold().green());
-            passed += 1;
-        } else {
-            println!("Case #{}: {}", case_num, style("WA").bold().red());
-            println!("  {}:\n{}", style("Expected").dim(), expected_trimmed);
-            println!("  {}:\n{}", style("Actual").dim(), actual_trimmed);
+                if actual_trimmed == expected_trimmed {
+                    println!(
+                        "Case #{}: {} {}",
+                        case_num,
+                        styles::success("AC"),
+                        style(time_str).dim()
+                    );
+                    passed += 1;
+                } else {
+                    println!(
+                        "Case #{}: {} {}",
+                        case_num,
+                        styles::error("WA"),
+                        style(time_str).dim()
+                    );
+                    println!("  {}:\n{}", style("Expected").dim(), expected_trimmed);
+                    println!("  {}:\n{}", style("Actual").dim(), actual_trimmed);
+                }
+            }
+            Err(e) => {
+                println!(
+                    "Case #{}: {}",
+                    case_num,
+                    styles::error("RE (Runtime Error)")
+                );
+                println!("  {}: {}", style("Details").dim(), e);
+            }
         }
     }
 

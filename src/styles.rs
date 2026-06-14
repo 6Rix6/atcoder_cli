@@ -9,5 +9,5 @@ pub fn warn(msg: &str) -> StyledObject<&str> {
 }
 
 pub fn success(msg: &str) -> StyledObject<&str> {
-    style(msg).green()
+    style(msg).green().bold().bright()
 }
