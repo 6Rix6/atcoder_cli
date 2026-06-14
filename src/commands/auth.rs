@@ -1,9 +1,11 @@
 use std::{fs, io, io::Write};
 
-use crate::cli::AuthCommands;
-use crate::constants::REVEL_SESSION;
-use crate::utils::atcoder_client::AtCoderClient;
-use crate::utils::cookie_storage;
+use crate::{
+    atcoder::client::AtCoderClient,
+    commands::AuthCommands,
+    constants::REVEL_SESSION,
+    cookie::{self, storage::CookieStorage},
+};
 
 /// Handler for 'acc auth <subcommand>'
 pub async fn handle(subcommand: &AuthCommands) {
@@ -11,8 +13,8 @@ pub async fn handle(subcommand: &AuthCommands) {
         AuthCommands::Login => {
             let cookie = request_user_input("REVAL_SESSION=");
 
-            let path = cookie_storage::get_cookie_path();
-            let storage = cookie_storage::CookieStorage::new(&path);
+            let path = cookie::utils::get_cookie_path();
+            let storage = CookieStorage::new(&path);
             let result = storage.set(REVEL_SESSION, &cookie);
 
             match result {
@@ -25,7 +27,7 @@ pub async fn handle(subcommand: &AuthCommands) {
             }
         }
         AuthCommands::Logout => {
-            let path = cookie_storage::get_cookie_path();
+            let path = cookie::utils::get_cookie_path();
 
             if !path.exists() {
                 println!("Cookie does not set.");
@@ -42,14 +44,14 @@ pub async fn handle(subcommand: &AuthCommands) {
             };
         }
         AuthCommands::Status => {
-            let path = cookie_storage::get_cookie_path();
+            let path = cookie::utils::get_cookie_path();
 
             if !path.exists() || !path.is_file() {
                 println!("Cookie does not set. You can set one with `acc auth login`.");
                 return;
             }
 
-            let storage = cookie_storage::CookieStorage::new(path);
+            let storage = CookieStorage::new(path);
             let cookie = match storage.get(REVEL_SESSION) {
                 Ok(Some(val)) => Some(val),
                 Ok(None) => {

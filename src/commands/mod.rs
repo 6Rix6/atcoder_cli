@@ -1,5 +1,9 @@
 use clap::{Parser, Subcommand};
 
+pub mod auth;
+pub mod init;
+pub mod test;
+
 #[derive(Parser, Debug)]
 pub struct Cli {
     #[command(subcommand)]
@@ -22,3 +26,5 @@ pub enum AuthCommands {
     Logout,
     Status,
 }
+
+

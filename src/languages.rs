@@ -1,4 +1,4 @@
-use crate::utils::config::ConfigRef;
+use crate::config::models::ConfigRef;
 
 pub struct Language {
     pub name: &'static str,

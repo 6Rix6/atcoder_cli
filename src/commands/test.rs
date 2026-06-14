@@ -4,20 +4,22 @@ use std::process::{Command, Stdio};
 
 use console::{Term, style};
 
-use crate::constants::REVEL_SESSION;
-use crate::styles;
-use crate::utils::atcoder_client::{self, AtCoderClient, TaskInfo};
-use crate::utils::config;
-use crate::utils::cookie_storage::{self, CookieStorage};
+use crate::{
+    atcoder::{self, client::AtCoderClient, models::TaskInfo},
+    config,
+    constants::REVEL_SESSION,
+    cookie::{self, storage::CookieStorage},
+    styles,
+};
 
 /// Handler for 'acc test <task_id>'
 pub async fn run(task_id: &str) {
-    let Some(task_info) = atcoder_client::get_task_info(task_id) else {
+    let Some(task_info) = atcoder::utils::get_task_info(task_id) else {
         eprintln!("{}", styles::error("Invalid task Url or Id."));
         return;
     };
 
-    let config = match config::load_config() {
+    let config = match config::utils::load_config() {
         Ok(Some(config)) => config,
         Ok(None) => {
             eprintln!("{}", styles::error("No config file found."));
@@ -72,7 +74,7 @@ pub async fn run(task_id: &str) {
         .unwrap();
     }
 
-    let cookie_path = cookie_storage::get_cookie_path();
+    let cookie_path = cookie::utils::get_cookie_path();
     let storage = CookieStorage::new(cookie_path);
 
     let cookie = config.cookie.or_else(|| match storage.get(REVEL_SESSION) {

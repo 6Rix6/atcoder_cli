@@ -1,21 +1,12 @@
 use reqwest::{Client, Response, redirect::Policy};
 use scraper::{ElementRef, Html, Selector};
 
-use crate::constants::REVEL_SESSION;
+use crate::{atcoder::models::SampleInput, constants::REVEL_SESSION};
 
-#[derive(Debug, Clone)]
-pub struct SampleInput {
-    pub input: String,
-    pub output: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct TaskInfo {
-    pub url: String,
-    pub contest_id: String,
-    pub task_id: String,
-    pub task_char: String
-}
+const SAMPLE_INPUT_KEY_JA: &str = "入力例";
+const SAMPLE_OUTPUT_KEY_JA: &str = "出力例";
+const SAMPLE_INPUT_KEY_EN: &str = "Sample Input";
+const SAMPLE_OUTPUT_KEY_EN: &str = "Sample Output";
 
 /// A client dedicated to interacting with AtCoder.
 pub struct AtCoderClient {
@@ -98,10 +89,10 @@ impl AtCoderClient {
                     .map(|h| h.text().collect::<String>())
                     .unwrap_or_default();
 
-                heading.contains("入力例")
-                    || heading.contains("出力例")
-                    || heading.contains("Sample Input")
-                    || heading.contains("Sample Output")
+                heading.contains(SAMPLE_INPUT_KEY_JA)
+                    || heading.contains(SAMPLE_OUTPUT_KEY_JA)
+                    || heading.contains(SAMPLE_INPUT_KEY_EN)
+                    || heading.contains(SAMPLE_OUTPUT_KEY_EN)
             })
             .collect();
 
@@ -129,43 +120,4 @@ impl AtCoderClient {
 
         samples
     }
-}
-
-pub fn get_task_info(id_or_url: &str) -> Option<TaskInfo> {
-    let task_id = id_or_url
-        .split('/')
-        .filter(|s| !s.is_empty())
-        .last()?
-        .split('?')
-        .next()?;
-
-    let valid = task_id
-        .split('_')
-        .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_alphanumeric()));
-
-    if !valid {
-        return None;
-    }
-
-    let parts: Vec<&str> = task_id.split('_').collect();
-    if parts.len() < 2 {
-        return None;
-    }
-
-    let contest_id = parts[..parts.len() - 1].join("-");
-    let task_char = parts.last().unwrap();
-
-    let url = format!(
-        "https://atcoder.jp/contests/{}/tasks/{}",
-        &contest_id, &task_id
-    );
-
-    let info = TaskInfo {
-        url: url,
-        contest_id: contest_id,
-        task_id: task_id.to_string(),
-        task_char: task_char.to_string()
-    };
-
-    return Some(info);
 }

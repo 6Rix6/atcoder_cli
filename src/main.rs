@@ -1,17 +1,10 @@
 use clap::Parser;
 
-mod cli;
-mod commands;
-mod constants;
-mod languages;
-mod utils;
-mod styles;
-
-use crate::cli::Commands;
+use atcoder_cli::commands::{self, Cli, Commands};
 
 #[tokio::main]
 async fn main() {
-    let args = cli::Cli::parse();
+    let args = Cli::parse();
 
     match &args.command {
         Commands::Test { task_id } => {

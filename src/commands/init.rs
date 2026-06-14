@@ -1,7 +1,9 @@
 use dialoguer::{FuzzySelect, theme::ColorfulTheme};
 
-use crate::languages::LANGUAGES;
-use crate::utils::config::{self, Config};
+use crate::{
+    config::{self, models::Config},
+    languages::LANGUAGES,
+};
 
 pub fn init() {
     let names: Vec<&str> = LANGUAGES.iter().map(|l| l.name).collect();
@@ -21,7 +23,7 @@ pub fn init() {
     let lang = &LANGUAGES[index];
     let config = Config::from(&lang.config);
 
-    match config::create_config(config) {
+    match config::utils::create_config(config) {
         Ok(path) => println!("Config created at: {}", path.display()),
         Err(e) => eprintln!("Error: {}", e),
     }
