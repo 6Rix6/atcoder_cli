@@ -1,12 +1,14 @@
-use std::process::{Command, Stdio};
+use std::process::Stdio;
+use tokio::process::Command;
 
-/// Compiles the source code using the provided compiler command and flags.
-pub fn compile(compiler: &str, flags: &[String]) -> Result<(), String> {
+/// Compiles the source code asynchronously using the provided compiler command and flags.
+pub async fn compile(compiler: &str, flags: &[String]) -> Result<(), String> {
     let output = Command::new(compiler)
         .args(flags)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
+        .await
         .map_err(|e| format!("Failed to execute compiler: {}", e))?;
 
     if !output.status.success() {

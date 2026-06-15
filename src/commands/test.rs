@@ -48,7 +48,7 @@ pub async fn run(task_id: &str) {
             .map(|f| expand_template(f, &vars))
             .collect();
 
-        if let Err(e) = compiler::compile(&compiler_command, &compiler_flags) {
+        if let Err(e) = compiler::compile(&compiler_command, &compiler_flags).await {
             term.clear_last_lines(1).unwrap();
 
             eprintln!("{}", styles::error("Compile failed:"));
@@ -96,7 +96,7 @@ pub async fn run(task_id: &str) {
         let input_data = sample.input.clone();
         let expected_output = sample.output.clone();
 
-        match runner::run_case(&run_command, &run_flags, &input_data) {
+        match runner::run_case(&run_command, &run_flags, &input_data).await {
             Ok(result) => {
                 let actual_trimmed = result.output.trim();
                 let expected_trimmed = expected_output.trim();
