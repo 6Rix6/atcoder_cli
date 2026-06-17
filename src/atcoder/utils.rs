@@ -1,4 +1,4 @@
-use crate::atcoder::models::TaskInfo;
+use crate::{atcoder::models::TaskInfo, constants::ATCODER_BASE_URL};
 
 pub fn get_task_info(id_or_url: &str) -> Option<TaskInfo> {
     let task_id = id_or_url
@@ -25,12 +25,18 @@ pub fn get_task_info(id_or_url: &str) -> Option<TaskInfo> {
     let task_char = parts.last().unwrap();
 
     let url = format!(
-        "https://atcoder.jp/contests/{}/tasks/{}",
-        &contest_id, &task_id
+        "{}/contests/{}/tasks/{}",
+        ATCODER_BASE_URL, &contest_id, &task_id
+    );
+
+    let submit_url = format!(
+        "{}/contests/{}/submit?taskScreenName={}",
+        ATCODER_BASE_URL, &contest_id, &task_id
     );
 
     let info = TaskInfo {
         url: url,
+        submit_url: submit_url,
         contest_id: contest_id,
         task_id: task_id.to_string(),
         task_char: task_char.to_string(),

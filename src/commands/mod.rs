@@ -1,5 +1,8 @@
 use clap::{Parser, Subcommand};
 
+#[macro_use]
+mod macros;
+
 pub mod auth;
 pub mod init;
 pub mod test;

@@ -40,14 +40,13 @@ impl AtCoderClient {
     /// Fetch HTML content from the given URL.
     async fn fetch_html(&self, url: &str) -> Result<String, reqwest::Error> {
         let response = self.fetch_page(url).await?;
+        let response = response.error_for_status()?;
+
         response.text().await
     }
 
     /// Fetch and return all sample input/output pairs for the given problem.
-    pub async fn get_samples(
-        &self,
-        url: &str,
-    ) -> Result<Vec<SampleInput>, Box<dyn std::error::Error>> {
+    pub async fn get_samples(&self, url: &str) -> Result<Vec<SampleInput>, reqwest::Error> {
         let html = self.fetch_html(url).await?;
         let samples = Self::extract_samples(&html);
         Ok(samples)

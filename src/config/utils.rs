@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use crate::{
     config::{error::ConfigError, models::Config},
-    constants::{CONFIG_DIR_NAME, CONFIG_FILE_NAME}
+    constants::{CONFIG_DIR_NAME, CONFIG_FILE_NAME},
 };
 
 pub fn load_local_config() -> Result<Option<Config>, ConfigError> {
@@ -11,27 +11,6 @@ pub fn load_local_config() -> Result<Option<Config>, ConfigError> {
 }
 
 pub fn load_global_config() -> Result<Option<Config>, ConfigError> {
-    // let local = PathBuf::from(CONFIG_FILE_NAME);
-    // if local.exists() {
-    //     let toml_str = std::fs::read_to_string(&local).map_err(|e| ConfigError::Read {
-    //         path: local.clone(),
-    //         source: e,
-    //     })?;
-    //
-    //     match toml::from_str::<Config>(&toml_str) {
-    //         Ok(config) => return Ok(Some(config)),
-    //         Err(e) => {
-    //             eprintln!(
-    //                 "{}: Failed to parse {}: {}",
-    //                 styles::warn("Warning"),
-    //                 local.display(),
-    //                 e
-    //             );
-    //             println!("Continuing with global settings...");
-    //         }
-    //     }
-    // }
-
     let Some(global) = dirs::config_dir().map(|d| d.join(CONFIG_DIR_NAME).join(CONFIG_FILE_NAME))
     else {
         return Ok(None);

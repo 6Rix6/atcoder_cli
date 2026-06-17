@@ -1,5 +1,6 @@
-use std::process::Stdio;
+use std::process::{ExitStatus, Stdio};
 use std::time::{Duration, Instant};
+use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use tokio::time::timeout;
@@ -13,12 +14,24 @@ pub struct RunResult {
     pub is_timeout: bool,
 }
 
+#[derive(Error, Debug)]
+pub enum RunError {
+    #[error("Failed to start process: {0}")]
+    StartFailed(#[from] std::io::Error),
+
+    #[error("Process timed out (TLE). Duration: {duration:?}")]
+    Timeout { duration: Duration },
+
+    #[error("Process exited with non-zero status: {status}\n{stderr}")]
+    RuntimeError { status: ExitStatus, stderr: String },
+}
+
 /// Runs the executable asymmetrically with the given input and returns the result.
 pub async fn run_case(
     run_cmd: &str,
     flags: &[String],
     input_data: &str,
-) -> Result<RunResult, String> {
+) -> Result<RunResult, RunError> {
     let time_limit = Duration::from_secs(DEFAULT_TIMEOUT_SECS);
     let start_time = Instant::now();
 
@@ -28,8 +41,7 @@ pub async fn run_case(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true)
-        .spawn()
-        .map_err(|e| format!("Failed to start process: {}", e))?;
+        .spawn()?;
 
     if let Some(mut stdin) = child.stdin.take() {
         let input_bytes = input_data.as_bytes().to_vec();
@@ -47,12 +59,10 @@ pub async fn run_case(
         Ok(Ok(output)) => {
             if !output.status.success() {
                 let stderr_str = String::from_utf8_lossy(&output.stderr).into_owned();
-                let mut err_msg = format!("Exit status: {}", output.status);
-                if !stderr_str.trim().is_empty() {
-                    err_msg.push('\n');
-                    err_msg.push_str(stderr_str.trim());
-                }
-                return Err(err_msg);
+                return Err(RunError::RuntimeError {
+                    status: output.status,
+                    stderr: stderr_str.trim().to_string(),
+                });
             }
 
             let actual_output = String::from_utf8_lossy(&output.stdout).into_owned();
@@ -62,10 +72,9 @@ pub async fn run_case(
                 is_timeout: false,
             })
         }
-        Ok(Err(e)) => Err(format!("Failed to get output: {}", e)),
-        Err(_) => {
-            // Timeout occurred!
-            Err("Process timed out. (TLE)".to_string())
-        }
+        Ok(Err(e)) => Err(RunError::StartFailed(e)),
+        Err(_) => Err(RunError::Timeout {
+            duration: time_limit,
+        }),
     }
 }
