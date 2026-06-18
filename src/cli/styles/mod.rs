@@ -19,3 +19,6 @@ pub fn info(msg: &str) -> StyledObject<&str> {
 pub fn dim(msg: &str) -> StyledObject<&str> {
     style(msg).dim()
 }
+
+#[macro_use]
+pub mod macros;

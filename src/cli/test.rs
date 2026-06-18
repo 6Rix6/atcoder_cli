@@ -11,7 +11,7 @@ use crate::{
         compiler,
         runner::{self, RunError},
     },
-    styles,
+    cli::styles
 };
 
 /// Handler for 'acc test <task_id>'

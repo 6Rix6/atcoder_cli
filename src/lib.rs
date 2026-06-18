@@ -5,4 +5,3 @@ pub mod constants;
 pub mod cookie;
 pub mod languages;
 pub mod process;
-pub mod styles;
