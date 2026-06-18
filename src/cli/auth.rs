@@ -2,7 +2,7 @@ use std::{fs, io, io::Write};
 
 use crate::{
     atcoder::client::AtCoderClient,
-    commands::AuthCommands,
+    cli::AuthCommands,
     constants::REVEL_SESSION,
     cookie::{self, storage::CookieStorage},
 };
