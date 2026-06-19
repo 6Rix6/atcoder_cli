@@ -4,6 +4,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::{
     atcoder::{self, client::AtCoderClient, models::SampleInput},
+    cli::styles,
     config::{self, error::ConfigError, models::Config},
     constants::{CONFIG_FILE_NAME, REVEL_SESSION},
     cookie::{self, storage::CookieStorage},
@@ -11,7 +12,7 @@ use crate::{
         compiler,
         runner::{self, RunError},
     },
-    cli::styles
+    utils::gnu_time::get_gnu_time_path,
 };
 
 /// Handler for 'acc test <task_id>'
@@ -50,8 +51,14 @@ pub async fn run(task_id: &str) {
         std::process::exit(1);
     };
 
-    // Print empty lines cleanly
-    print!("\n\n");
+    print!("\n");
+
+    let gnu_time_path = get_gnu_time_path();
+    if gnu_time_path.is_none() {
+        warn_ln!("GNU time is not available. Memory usage will not be measured.");
+    }
+
+    print!("\n");
 
     let mut passed = 0;
     let run_command = expand_template(&config.run, &vars);
@@ -64,7 +71,15 @@ pub async fn run(task_id: &str) {
         .collect();
 
     for (i, sample) in samples.iter().enumerate() {
-        if execute_test_case(i + 1, &run_command, &run_flags, sample).await {
+        if execute_test_case(
+            i + 1,
+            &run_command,
+            &run_flags,
+            sample,
+            gnu_time_path.as_ref().and_then(|p| p.to_str()),
+        )
+        .await
+        {
             passed += 1;
         }
     }
@@ -138,7 +153,7 @@ fn get_cookie(config_cookie: Option<&str>) -> Option<String> {
             success_ln!("Using Cookie in {}", path_str);
         }
         None => {
-            warn_ln!("Cookie does not set.");
+            warn_ln!("Cookie is not set.");
         }
     };
 
@@ -178,16 +193,18 @@ async fn execute_test_case(
     run_command: &str,
     run_flags: &[String],
     sample: &SampleInput,
+    gnu_time: Option<&str>,
 ) -> bool {
     info_ln!("Sample #{}", case_num);
     let mut is_ac = false;
 
-    match runner::run_case(run_command, run_flags, &sample.input).await {
+    match runner::run_case(run_command, run_flags, &sample.input, gnu_time).await {
         Ok(result) => {
-            info_ln!(
-                "time: {}",
-                styles::dim(&format!("{:?}", result.duration))
-            );
+            info_ln!("time: {}", styles::dim(&format!("{:?}", result.duration)));
+
+            if let Some(memory_mb) = result.memory_mb {
+                info_ln!("memory: {}", styles::dim(&format!("{:.3}mb", memory_mb)));
+            }
 
             if compare_lines_trimmed(&result.output, &sample.output) {
                 success_ln!("{}", styles::success("AC"));
@@ -215,7 +232,7 @@ async fn execute_test_case(
         }
     }
 
-    println!();
+    print!("\n");
     is_ac
 }
 
