@@ -1,8 +1,11 @@
-use std::{fs, io, io::Write};
+use dialoguer::{Input, theme::ColorfulTheme};
 
 use crate::{
     atcoder::client::AtCoderClient,
-    cli::AuthCommands,
+    cli::{
+        AuthCommands,
+        styles::{self, spinner::Spinner},
+    },
     constants::REVEL_SESSION,
     cookie::{self, storage::CookieStorage},
 };
@@ -11,18 +14,39 @@ use crate::{
 pub async fn handle(subcommand: &AuthCommands) {
     match subcommand {
         AuthCommands::Login => {
-            let cookie = request_user_input("REVAL_SESSION=");
+            info_ln!("Open AtCoder in your browser and log in.");
+            info_ln!(
+                "Open the developer tools by pressing F12 or right-clicking and selecting Inspect, then go to the {} tab > {} > {} > https://atcoder.jp.",
+                styles::dim("Application"),
+                styles::dim("Storage"),
+                styles::dim("Cookie")
+            );
+            info_ln!(
+                "Copy the value of {} and paste it below.",
+                styles::dim(REVEL_SESSION)
+            );
+
+            let input = Input::<String>::with_theme(&ColorfulTheme::default())
+                .with_prompt(REVEL_SESSION)
+                .report(false)
+                .interact()
+                .unwrap_or_else(|e| {
+                    error_ln!("An error occurred: {}", e);
+                    std::process::exit(1);
+                });
 
             let path = cookie::utils::get_cookie_path();
             let storage = CookieStorage::new(&path);
-            let result = storage.set(REVEL_SESSION, &cookie);
+            let result = storage.set(REVEL_SESSION, &input);
+
+            print!("\n");
 
             match result {
                 Ok(_) => {
-                    println!("Saved cookie at: {}", path.to_string_lossy().into_owned())
+                    success_ln!("Saved cookie at: {}", path.to_string_lossy().into_owned());
                 }
                 Err(_) => {
-                    println!("Failed to save cookie. Try again.")
+                    error_ln!("Failed to save cookie. Try again.");
                 }
             }
         }
@@ -30,16 +54,17 @@ pub async fn handle(subcommand: &AuthCommands) {
             let path = cookie::utils::get_cookie_path();
 
             if !path.exists() {
-                println!("Cookie does not set.");
+                warn_ln!("Cookie file does not exist.");
                 return;
             }
 
-            match fs::remove_file(path) {
+            match std::fs::remove_file(path) {
                 Ok(_) => {
-                    println!("Cookie removed.");
+                    success_ln!("Cookie removed.");
                 }
                 Err(e) => {
-                    eprintln!("Failed to remove cookie: {}", e);
+                    error_ln!("Failed to remove cookie: {}", e);
+                    std::process::exit(1);
                 }
             };
         }
@@ -47,7 +72,10 @@ pub async fn handle(subcommand: &AuthCommands) {
             let path = cookie::utils::get_cookie_path();
 
             if !path.exists() || !path.is_file() {
-                println!("Cookie does not set. You can set one with `acc auth login`.");
+                warn_ln!(
+                    "Cookie is not set. Run {} to log in to AtCoder.",
+                    styles::dim("`acc auth login`")
+                );
                 return;
             }
 
@@ -55,15 +83,20 @@ pub async fn handle(subcommand: &AuthCommands) {
             let cookie = match storage.get(REVEL_SESSION) {
                 Ok(Some(val)) => Some(val),
                 Ok(None) => {
-                    println!("{} does not exists.", REVEL_SESSION);
+                    warn_ln!(
+                        "Necessary cookie ({}) does not exist. Run {} to log in to AtCoder.",
+                        REVEL_SESSION,
+                        styles::dim("`acc auth login`")
+                    );
                     return;
                 }
                 Err(e) => {
-                    eprintln!("An error occurred: {}", e);
+                    error_ln!("An error occurred: {}", e);
                     return;
                 }
             };
 
+            let spinner = Spinner::new("Testing cookie...");
             let client = AtCoderClient::new(cookie);
 
             match client
@@ -71,32 +104,36 @@ pub async fn handle(subcommand: &AuthCommands) {
                 .await
             {
                 Ok(response) => {
-                    if response.status().is_success() {
-                        println!("OK");
-                        return;
-                    }
+                    let status = response.status();
 
-                    if response.status().is_redirection() {
-                        println!("NG");
-                        return;
+                    if status.is_success() {
+                        spinner.finish(
+                            &format!("{}", styles::success("200 OK")),
+                            "Cookie is valid.",
+                        );
+                    } else if status.is_redirection() {
+                        spinner.finish(
+                            &format!("{}", styles::error(&status.to_string())),
+                            "Session expired. Please log in again.",
+                        );
+                    } else {
+                        spinner.finish(
+                            &format!("{}", styles::error(&status.to_string())),
+                            "Received unexpected status code. Try again.",
+                        );
                     }
-
-                    println!("Received other status code: {}", response.status())
                 }
                 Err(e) => {
-                    eprintln!("Network error occurred: {}", e);
+                    let code = e
+                        .status()
+                        .map_or_else(|| "ERROR".to_string(), |s| s.to_string());
+                    spinner.finish(
+                        &format!("{}", styles::error(&code)),
+                        "A network error occurred:",
+                    );
+                    eprintln!("{}", e);
                 }
             }
         }
     }
-}
-
-fn request_user_input(message: &str) -> String {
-    let mut input = String::new();
-    print!("{}", message);
-    io::stdout().flush().unwrap();
-    io::stdin()
-        .read_line(&mut input)
-        .expect("Failed to read line");
-    input.trim().to_string()
 }
