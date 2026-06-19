@@ -22,3 +22,5 @@ pub fn dim(msg: &str) -> StyledObject<&str> {
 
 #[macro_use]
 pub mod macros;
+
+pub mod spinner;

@@ -1,10 +1,8 @@
-use std::{collections::HashMap, time::Duration};
-
-use indicatif::{ProgressBar, ProgressStyle};
+use std::collections::HashMap;
 
 use crate::{
     atcoder::{self, client::AtCoderClient, models::SampleInput},
-    cli::styles,
+    cli::styles::{self, spinner::Spinner},
     config::{self, error::ConfigError, models::Config},
     constants::{CONFIG_FILE_NAME, REVEL_SESSION},
     cookie::{self, storage::CookieStorage},
@@ -108,7 +106,7 @@ async fn compile(
     compiler_flags: &[String],
     vars: &HashMap<&str, &str>,
 ) -> Result<(), ()> {
-    let pb = create_spinner("Compiling source...");
+    let spinner = Spinner::new("Compiling source...");
 
     let compiler_command = expand_template(compiler_template, vars);
     let compiler_flags: Vec<String> = compiler_flags
@@ -117,8 +115,7 @@ async fn compile(
         .collect();
 
     if let Err(e) = compiler::compile(&compiler_command, &compiler_flags).await {
-        finish_spinner(
-            &pb,
+        spinner.finish(
             &format!("{}", styles::error("ERROR")),
             &format!("Compile failed ({}): ", styles::error("CE")),
         );
@@ -126,8 +123,7 @@ async fn compile(
         return Err(());
     }
 
-    finish_spinner(
-        &pb,
+    spinner.finish(
         &format!("{}", styles::success("✓")),
         "Compile finished.",
     );
@@ -162,12 +158,11 @@ fn get_cookie(config_cookie: Option<&str>) -> Option<String> {
 
 async fn fetch_samples(url: &str, cookie: Option<String>) -> Option<Vec<SampleInput>> {
     let client = AtCoderClient::new(cookie);
-    let pb = create_spinner("Fetching samples...");
+    let spinner = Spinner::new("Fetching samples...");
 
     match client.get_samples(url).await {
         Ok(val) => {
-            finish_spinner(
-                &pb,
+            spinner.finish(
                 &format!("{}", styles::success("200 OK")),
                 &format!("{} sample(s) fetched.", val.len()),
             );
@@ -177,8 +172,7 @@ async fn fetch_samples(url: &str, cookie: Option<String>) -> Option<Vec<SampleIn
             let code = e
                 .status()
                 .map_or_else(|| "ERROR".to_string(), |s| s.to_string());
-            finish_spinner(
-                &pb,
+            spinner.finish(
                 &format!("{}", styles::error(&code)),
                 "Failed to fetch samples:",
             );
@@ -269,22 +263,4 @@ fn load_config() -> Result<Option<Config>, ConfigError> {
             config::utils::load_global_config()
         }
     }
-}
-
-fn create_spinner(msg: &'static str) -> ProgressBar {
-    let pb = ProgressBar::new_spinner();
-    pb.set_style(
-        ProgressStyle::with_template(&format_ln!("{spinner:}", "{{msg}}"))
-            .unwrap()
-            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
-    );
-    pb.set_message(msg);
-    pb.enable_steady_tick(Duration::from_millis(100));
-    pb
-}
-
-/// Helper to wrap up progress spinner with custom status and message
-fn finish_spinner(pb: &ProgressBar, prefix: &str, msg: &str) {
-    pb.set_style(ProgressStyle::with_template(&format_ln!(prefix, "{{msg}}")).unwrap());
-    pb.finish_with_message(msg.to_string());
 }
