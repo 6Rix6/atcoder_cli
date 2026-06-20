@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     atcoder::{self, client::AtCoderClient, models::SampleInput},
-    cli::styles::{self, spinner::Spinner},
+    cli::styles::{self, ERROR_PREFIX, SUCCESS_PREFIX, spinner::Spinner},
     config::{self, error::ConfigError, models::Config},
     constants::{CONFIG_FILE_NAME, REVEL_SESSION},
     cookie::{self, storage::CookieStorage},
@@ -116,7 +116,7 @@ async fn compile(
 
     if let Err(e) = compiler::compile(&compiler_command, &compiler_flags).await {
         spinner.finish(
-            &format!("{}", styles::error("ERROR")),
+            &format!("{}", styles::error(ERROR_PREFIX)),
             &format!("Compile failed ({}): ", styles::error("CE")),
         );
         eprintln!("{}", e);
@@ -124,7 +124,7 @@ async fn compile(
     }
 
     spinner.finish(
-        &format!("{}", styles::success("✓")),
+        &format!("{}", styles::success(SUCCESS_PREFIX)),
         "Compile finished.",
     );
     Ok(())
@@ -171,7 +171,7 @@ async fn fetch_samples(url: &str, cookie: Option<String>) -> Option<Vec<SampleIn
         Err(e) => {
             let code = e
                 .status()
-                .map_or_else(|| "ERROR".to_string(), |s| s.to_string());
+                .map_or_else(|| String::from(ERROR_PREFIX), |s| s.to_string());
             spinner.finish(
                 &format!("{}", styles::error(&code)),
                 "Failed to fetch samples:",

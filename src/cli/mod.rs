@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 
 #[macro_use]
 mod styles;
@@ -15,12 +15,14 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    Test { task_id: String },
+    Test {
+        task_id: String,
+    },
     Auth {
         #[command(subcommand)]
         subcommand: AuthCommands,
     },
-    Init
+    Init(InitArgs),
 }
 
 #[derive(Subcommand, Debug)]
@@ -30,4 +32,8 @@ pub enum AuthCommands {
     Status,
 }
 
-
+#[derive(Debug, Args)]
+pub struct InitArgs {
+    #[arg(short, long)]
+    pub directory: Option<String>,
+}

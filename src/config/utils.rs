@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::{
     config::{error::ConfigError, models::Config},
@@ -7,7 +7,7 @@ use crate::{
 
 pub fn load_local_config() -> Result<Option<Config>, ConfigError> {
     let local = PathBuf::from(CONFIG_FILE_NAME);
-    load_config(local)
+    load_config(&local)
 }
 
 pub fn load_global_config() -> Result<Option<Config>, ConfigError> {
@@ -16,40 +16,34 @@ pub fn load_global_config() -> Result<Option<Config>, ConfigError> {
         return Ok(None);
     };
 
-    load_config(global)
+    load_config(&global)
 }
 
-fn load_config(path: PathBuf) -> Result<Option<Config>, ConfigError> {
+fn load_config(path: &Path) -> Result<Option<Config>, ConfigError> {
     if path.exists() {
-        let toml_str = std::fs::read_to_string(&path).map_err(|e| ConfigError::Read {
-            path: path.clone(),
+        let toml_str = std::fs::read_to_string(path).map_err(|e| ConfigError::Read {
+            path: path.to_path_buf(),
             source: e,
         })?;
+        
         toml::from_str(&toml_str)
             .map(Some)
-            .map_err(|e| ConfigError::Parse { path, source: e })
+            .map_err(|e| ConfigError::Parse { 
+                path: path.to_path_buf(), 
+                source: e 
+            })
     } else {
         Ok(None)
     }
 }
 
-pub fn create_config(config: Config) -> Result<PathBuf, ConfigError> {
-    let config_dir = dirs::config_dir()
-        .ok_or_else(|| ConfigError::Write {
-            path: PathBuf::from(CONFIG_DIR_NAME),
-            source: std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Could not determine config directory",
-            ),
-        })?
-        .join(CONFIG_DIR_NAME);
-
-    std::fs::create_dir_all(&config_dir).map_err(|e| ConfigError::Write {
-        path: config_dir.clone(),
+pub fn create_config(config: Config, directory: &PathBuf) -> Result<PathBuf, ConfigError> {
+    std::fs::create_dir_all(directory).map_err(|e| ConfigError::Write {
+        path: directory.clone(),
         source: e,
     })?;
 
-    let config_path = config_dir.join(CONFIG_FILE_NAME);
+    let config_path = directory.join(CONFIG_FILE_NAME);
 
     let content = toml::to_string_pretty(&config).map_err(|e| ConfigError::Serialize {
         path: config_path.clone(),

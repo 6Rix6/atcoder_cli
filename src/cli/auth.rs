@@ -1,10 +1,10 @@
-use dialoguer::{Input, theme::ColorfulTheme};
+use dialoguer::Input;
 
 use crate::{
     atcoder::client::AtCoderClient,
     cli::{
         AuthCommands,
-        styles::{self, spinner::Spinner},
+        styles::{self, ERROR_PREFIX, dialog_theme::DialogTheme, spinner::Spinner},
     },
     constants::REVEL_SESSION,
     cookie::{self, storage::CookieStorage},
@@ -26,7 +26,7 @@ pub async fn handle(subcommand: &AuthCommands) {
                 styles::dim(REVEL_SESSION)
             );
 
-            let input = Input::<String>::with_theme(&ColorfulTheme::default())
+            let input = Input::<String>::with_theme(&DialogTheme::default())
                 .with_prompt(REVEL_SESSION)
                 .report(false)
                 .interact()
@@ -126,7 +126,7 @@ pub async fn handle(subcommand: &AuthCommands) {
                 Err(e) => {
                     let code = e
                         .status()
-                        .map_or_else(|| "ERROR".to_string(), |s| s.to_string());
+                        .map_or_else(|| String::from(ERROR_PREFIX), |s| s.to_string());
                     spinner.finish(
                         &format!("{}", styles::error(&code)),
                         "A network error occurred:",

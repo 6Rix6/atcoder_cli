@@ -4,17 +4,17 @@ use atcoder_cli::cli::{self, Cli, Commands};
 
 #[tokio::main]
 async fn main() {
-    let args = Cli::parse();
+    let cli = Cli::parse();
 
-    match &args.command {
+    match &cli.command {
         Commands::Test { task_id } => {
             cli::test::run(&task_id).await;
         }
         Commands::Auth { subcommand } => {
             cli::auth::handle(&subcommand).await;
         }
-        Commands::Init => {
-            cli::init::init();
+        Commands::Init(args) => {
+            cli::init::init(&args).await;
         }
     }
 }

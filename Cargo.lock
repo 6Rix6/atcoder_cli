@@ -60,6 +60,7 @@ dependencies = [
  "console",
  "dialoguer",
  "dirs",
+ "fuzzy-matcher",
  "indicatif",
  "nix",
  "reqwest",
