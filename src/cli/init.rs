@@ -1,12 +1,20 @@
 use std::path::PathBuf;
 
+use clap::Args;
+use dialoguer::{Confirm, FuzzySelect};
+
 use crate::{
-    cli::{InitArgs, styles::{self, dialog_theme::DialogTheme}},
+    cli::styles::{self, dialog_theme::DialogTheme},
     config::{self, models::Config},
     constants::{CONFIG_DIR_NAME, CONFIG_FILE_NAME},
     languages::LANGUAGES,
 };
-use dialoguer::{Confirm, FuzzySelect};
+
+#[derive(Debug, Args)]
+pub struct InitArgs {
+    #[arg(short, long)]
+    pub directory: Option<String>,
+}
 
 pub async fn init(args: &InitArgs) {
     let dir = args

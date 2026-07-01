@@ -1,9 +1,14 @@
-use clap::{Args, Parser, Subcommand};
+use clap::{Parser, Subcommand};
+
+use crate::cli::{auth::AuthArgs, dl::DlArgs, init::InitArgs, test::TestArgs};
 
 #[macro_use]
 mod styles;
 
+mod utils;
+
 pub mod auth;
+pub mod dl;
 pub mod init;
 pub mod test;
 
@@ -15,25 +20,14 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    Test {
-        task_id: String,
-    },
-    Auth {
-        #[command(subcommand)]
-        subcommand: AuthCommands,
-    },
+    #[clap(visible_alias = "t")]
+    Test(TestArgs),
+
+    #[clap(visible_alias = "a")]
+    Auth(AuthArgs),
+
     Init(InitArgs),
-}
 
-#[derive(Subcommand, Debug)]
-pub enum AuthCommands {
-    Login,
-    Logout,
-    Status,
-}
-
-#[derive(Debug, Args)]
-pub struct InitArgs {
-    #[arg(short, long)]
-    pub directory: Option<String>,
+    #[clap(visible_alias = "dl")]
+    Download(DlArgs),
 }

@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 
+use clap::Args;
+
 use crate::{
     atcoder::{self, client::AtCoderClient, models::SampleInput},
-    cli::styles::{self, ERROR_PREFIX, SUCCESS_PREFIX, spinner::Spinner},
+    cli::{
+        styles::{self, ERROR_PREFIX, SUCCESS_PREFIX, spinner::Spinner},
+        utils,
+    },
     config::{self, error::ConfigError, models::Config},
-    constants::{CONFIG_FILE_NAME, REVEL_SESSION},
-    cookie::{self, storage::CookieStorage},
     process::{
         compiler,
         runner::{self, RunError},
@@ -13,9 +16,14 @@ use crate::{
     utils::gnu_time::get_gnu_time_path,
 };
 
+#[derive(Debug, Args)]
+pub struct TestArgs {
+    pub task_id: String,
+}
+
 /// Handler for 'acc test <task_id>'
-pub async fn run(task_id: &str) {
-    let Some(task_info) = atcoder::utils::get_task_info(task_id) else {
+pub async fn run(args: &TestArgs) {
+    let Some(task_info) = atcoder::utils::get_task_info(&args.task_id) else {
         error_ln!("Invalid task URL or ID.");
         std::process::exit(1);
     };
@@ -43,7 +51,7 @@ pub async fn run(task_id: &str) {
         }
     }
 
-    let cookie = get_cookie(config.cookie.as_deref());
+    let cookie = utils::get_revel_session();
 
     let Some(samples) = fetch_samples(&task_info.url, cookie).await else {
         std::process::exit(1);
@@ -128,32 +136,6 @@ async fn compile(
         "Compile finished.",
     );
     Ok(())
-}
-
-fn get_cookie(config_cookie: Option<&str>) -> Option<String> {
-    let cookie_path = cookie::utils::get_cookie_path();
-    let storage = CookieStorage::new(&cookie_path);
-
-    let is_from_config = config_cookie.is_some();
-    let cookie = config_cookie
-        .map(|s| s.to_string())
-        .or_else(|| storage.get(REVEL_SESSION).ok().flatten());
-
-    match &cookie {
-        Some(_) => {
-            let path_str = if is_from_config {
-                CONFIG_FILE_NAME.to_string()
-            } else {
-                cookie_path.display().to_string()
-            };
-            success_ln!("Using Cookie in {}", path_str);
-        }
-        None => {
-            warn_ln!("Cookie is not set.");
-        }
-    };
-
-    cookie
 }
 
 async fn fetch_samples(url: &str, cookie: Option<String>) -> Option<Vec<SampleInput>> {

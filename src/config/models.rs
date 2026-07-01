@@ -6,7 +6,6 @@ pub struct Config {
     pub compiler_flags: Option<Vec<String>>,
     pub run: String,
     pub run_flags: Option<Vec<String>>,
-    pub cookie: Option<String>,
 }
 
 pub struct ConfigRef {
@@ -14,7 +13,6 @@ pub struct ConfigRef {
     pub compiler_flags: Option<&'static [&'static str]>,
     pub run: &'static str,
     pub run_flags: Option<&'static [&'static str]>,
-    pub cookie: Option<&'static str>,
 }
 
 impl From<&ConfigRef> for Config {
@@ -28,7 +26,6 @@ impl From<&ConfigRef> for Config {
             run_flags: r
                 .run_flags
                 .map(|f| f.iter().map(|s| s.to_string()).collect()),
-            cookie: r.cookie.map(str::to_string),
         }
     }
 }

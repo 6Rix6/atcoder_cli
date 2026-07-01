@@ -7,14 +7,17 @@ async fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::Test { task_id } => {
-            cli::test::run(&task_id).await;
+        Commands::Test(args) => {
+            cli::test::run(&args).await;
         }
-        Commands::Auth { subcommand } => {
-            cli::auth::handle(&subcommand).await;
+        Commands::Auth(args) => {
+            cli::auth::handle(&args).await;
         }
         Commands::Init(args) => {
             cli::init::init(&args).await;
+        }
+        Commands::Download(args) => {
+            cli::dl::download(&args).await;
         }
     }
 }

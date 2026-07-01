@@ -1,18 +1,29 @@
+use clap::{Args, Subcommand};
 use dialoguer::Input;
 
 use crate::{
     atcoder::client::AtCoderClient,
-    cli::{
-        AuthCommands,
-        styles::{self, ERROR_PREFIX, dialog_theme::DialogTheme, spinner::Spinner},
-    },
+    cli::styles::{self, ERROR_PREFIX, dialog_theme::DialogTheme, spinner::Spinner},
     constants::REVEL_SESSION,
     cookie::{self, storage::CookieStorage},
 };
 
+#[derive(Debug, Args)]
+pub struct AuthArgs {
+    #[command(subcommand)]
+    subcommand: AuthCommands,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum AuthCommands {
+    Login,
+    Logout,
+    Status,
+}
+
 /// Handler for 'acc auth <subcommand>'
-pub async fn handle(subcommand: &AuthCommands) {
-    match subcommand {
+pub async fn handle(args: &AuthArgs) {
+    match &args.subcommand {
         AuthCommands::Login => {
             info_ln!("Open AtCoder in your browser and log in.");
             info_ln!(

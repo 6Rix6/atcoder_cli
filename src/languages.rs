@@ -13,7 +13,6 @@ pub const LANGUAGES: &[Language] = &[
             compiler_flags: Some(&["main.cpp", "-O2", "-o", "solution"]),
             run: "./solution",
             run_flags: None,
-            cookie: None,
         },
     },
     Language {
@@ -23,7 +22,6 @@ pub const LANGUAGES: &[Language] = &[
             compiler_flags: None,
             run: "python3",
             run_flags: Some(&["main.py", "-u"]),
-            cookie: None,
         },
     },
     Language {
@@ -33,7 +31,6 @@ pub const LANGUAGES: &[Language] = &[
             compiler_flags: None,
             run: "./target/release/solution",
             run_flags: None,
-            cookie: None,
         },
     },
 ];

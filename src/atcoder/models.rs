@@ -7,6 +7,14 @@ pub struct SampleInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct TaskPage {
+    pub title: String,
+    pub time_limit: u32,
+    pub memory_limit: u32,
+    pub problem_md: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct TaskInfo {
     pub url: String,
     pub submit_url: String,
@@ -23,5 +31,20 @@ impl TaskInfo {
         map.insert("TASK_CHAR", &self.task_char);
 
         map
+    }
+}
+
+#[derive(Debug)]
+pub enum TaskLanguage {
+    Japanese,
+    English,
+}
+
+impl TaskLanguage {
+    pub fn code(&self) -> &str {
+        match self {
+            Self::Japanese => "ja",
+            Self::English => "en",
+        }
     }
 }
