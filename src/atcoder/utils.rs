@@ -16,12 +16,12 @@ pub fn get_task_info(id_or_url: &str) -> Option<TaskInfo> {
     }
 
     let parts: Vec<&str> = task_id.split('_').collect();
-    if parts.len() < 2 {
+    let (task_char, contest_parts) = parts.split_last()?;
+    if contest_parts.is_empty() {
         return None;
     }
 
-    let contest_id = parts[..parts.len() - 1].join("-");
-    let task_char = parts.last().unwrap();
+    let contest_id = contest_parts.join("-");
 
     let url = format!(
         "{}/contests/{}/tasks/{}",

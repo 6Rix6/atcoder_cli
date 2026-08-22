@@ -51,13 +51,10 @@ pub async fn run_case(
     let mut program = run_cmd;
 
     #[cfg(unix)]
-    if let Some(time_path) = gnu_time {
-        let file_path = gnu_time_file
-            .as_ref()
-            .unwrap()
-            .path()
-            .to_string_lossy()
-            .into_owned();
+    if let Some(time_path) = gnu_time
+        && let Some(file) = gnu_time_file.as_ref()
+    {
+        let file_path = file.path().to_string_lossy().into_owned();
         cmd_args.extend_from_slice(&[
             "-f".to_string(),
             "%M".to_string(),
