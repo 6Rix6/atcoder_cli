@@ -81,4 +81,4 @@ run_flags = []                         # 省略可
 
 ## ライセンス
 
-未定(個人利用想定)。詳細は [DEVELOPMENT.md](./DEVELOPMENT.md) も参照してください。
+MIT LICENSE

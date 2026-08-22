@@ -63,8 +63,7 @@ main.rs ──> cli ──> atcoder / config / cookie / process / utils
 │       └── gnu_time.rs    # GNU time の検出(メモリ計測用)
 │
 ├── README.md              # 利用者ドキュメント(日本語)
-├── README-en.md           # 利用者ドキュメント(英語)
-└── atcoder.toml           # (gitignore)開発者のローカル設定
+└── README-en.md           # 利用者ドキュメント(英語)
 ```
 
 ## 主要な設計方針
@@ -85,7 +84,7 @@ main.rs ──> cli ──> atcoder / config / cookie / process / utils
 
 ### 非同期について
 
-v0.1 時点で tokio を廃止し完全同期化している。ワークロードが逐次的(fetch→compile→逐次テスト)で並行性の恩恵がないため。
+tokioは使用せず完全同期。ワークロードが逐次的(fetch→compile→逐次テスト)で並行性の恩恵がないため。
 
 - HTTP: `reqwest::blocking`
 - プロセス実行: `std::process` + watchdog スレッド(unix では `setsid` + `killpg` でプロセスグループごと kill)

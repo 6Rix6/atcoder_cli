@@ -81,4 +81,4 @@ The cookie saved by `acc auth login` is stored in plaintext at `~/.config/atcode
 
 ## License
 
-TBD (personal use). See also [DEVELOPMENT.md](./DEVELOPMENT.md) for development notes.
+MIT LICENSE
