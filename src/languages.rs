@@ -27,8 +27,8 @@ pub const LANGUAGES: &[Language] = &[
     Language {
         name: "Rust",
         config: ConfigRef {
-            compiler: Some("cargo build --release"),
-            compiler_flags: None,
+            compiler: Some("cargo"),
+            compiler_flags: Some(&["build", "--release"]),
             run: "./target/release/solution",
             run_flags: None,
         },
