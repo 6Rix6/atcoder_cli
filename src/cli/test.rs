@@ -22,8 +22,10 @@ use crate::{
     utils::gnu_time::get_gnu_time_path,
 };
 
+/// Run sample test cases for a task.
 #[derive(Debug, Args)]
 pub struct TestArgs {
+    /// Task ID or problem URL (e.g. "abc350_a" or the tasks/... URL)
     pub task_id: String,
 }
 

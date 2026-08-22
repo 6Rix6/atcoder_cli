@@ -16,6 +16,7 @@ use crate::{
     error::AppError,
 };
 
+/// Manage the AtCoder login session.
 #[derive(Debug, Args)]
 pub struct AuthArgs {
     #[command(subcommand)]
@@ -24,8 +25,11 @@ pub struct AuthArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum AuthCommands {
+    /// Save the REVEL_SESSION cookie by pasting it from your browser.
     Login,
+    /// Delete the saved cookie file.
     Logout,
+    /// Check whether the saved cookie is still valid.
     Status,
 }
 

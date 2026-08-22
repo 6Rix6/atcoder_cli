@@ -6,8 +6,10 @@ use crate::{
     error::AppError,
 };
 
+/// Download a problem statement as Markdown.
 #[derive(Debug, Args)]
 pub struct DlArgs {
+    /// Task ID or problem URL (e.g. "abc350_a" or the tasks/... URL)
     pub task_id: String,
 }
 

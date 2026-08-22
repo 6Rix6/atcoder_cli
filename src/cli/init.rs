@@ -11,8 +11,11 @@ use crate::{
     languages::LANGUAGES,
 };
 
+/// Create an atcoder.toml config file interactively.
 #[derive(Debug, Args)]
 pub struct InitArgs {
+    /// Directory where the config file is written
+    /// [default: the global config directory]
     #[arg(short, long)]
     pub directory: Option<String>,
 }

@@ -24,7 +24,10 @@ pub enum Outcome {
     Failed,
 }
 
+/// A CLI helper for AtCoder: download problem statements, run sample tests,
+/// and manage your login session.
 #[derive(Parser, Debug)]
+#[command(name = "acc", version)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -32,14 +35,18 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
+    /// Run sample test cases for a task and report AC/WA/TLE/RE verdicts.
     #[clap(visible_alias = "t")]
     Test(TestArgs),
 
+    /// Manage the AtCoder login session (REVEL_SESSION cookie).
     #[clap(visible_alias = "a")]
     Auth(AuthArgs),
 
+    /// Create an atcoder.toml config file interactively.
     Init(InitArgs),
 
+    /// Download a problem statement as Markdown to stdout.
     #[clap(visible_alias = "dl")]
     Download(DlArgs),
 }
