@@ -31,4 +31,7 @@ pub enum AppError {
 
     #[error("no config file found")]
     NoConfig,
+
+    #[error("this command requires an interactive terminal")]
+    NotInteractive,
 }

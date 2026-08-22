@@ -4,7 +4,7 @@ use dialoguer::Input;
 use crate::{
     atcoder::client::AtCoderClient,
     cli::{
-        Outcome,
+        self, Outcome,
         styles::{self, ERROR_PREFIX, dialog_theme::DialogTheme, spinner::Spinner},
     },
     constants::REVEL_SESSION,
@@ -39,6 +39,8 @@ pub async fn handle(args: &AuthArgs) -> Result<Outcome, AppError> {
 }
 
 async fn login() -> Result<Outcome, AppError> {
+    cli::ensure_interactive()?;
+
     info_ln!("Open AtCoder in your browser and log in.");
     info_ln!(
         "Open the developer tools by pressing F12 or right-clicking and selecting Inspect, then go to the {} tab > {} > {} > https://atcoder.jp.",

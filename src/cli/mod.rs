@@ -1,3 +1,5 @@
+use std::io::IsTerminal;
+
 use clap::{Parser, Subcommand};
 
 use crate::cli::{auth::AuthArgs, dl::DlArgs, init::InitArgs, test::TestArgs};
@@ -67,4 +69,16 @@ pub fn report_error(err: &AppError) {
     }
 
     eprintln!("[{}] {}", styles::error(styles::ERROR_PREFIX), text);
+}
+
+/// Returns an error when no interactive terminal is available.
+///
+/// dialoguer prompts never complete without a TTY (they re-render forever),
+/// so commands that prompt must bail out before asking for input.
+pub fn ensure_interactive() -> Result<(), AppError> {
+    if std::io::stdin().is_terminal() {
+        Ok(())
+    } else {
+        Err(AppError::NotInteractive)
+    }
 }

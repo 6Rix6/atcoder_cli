@@ -4,7 +4,7 @@ use clap::Args;
 use dialoguer::{Confirm, FuzzySelect};
 
 use crate::{
-    cli::{Outcome, styles::dialog_theme::DialogTheme},
+    cli::{self, Outcome, styles::dialog_theme::DialogTheme},
     config::{self, error::ConfigError, models::Config},
     constants::{CONFIG_DIR_NAME, CONFIG_FILE_NAME},
     error::AppError,
@@ -18,6 +18,7 @@ pub struct InitArgs {
 }
 
 pub async fn init(args: &InitArgs) -> Result<Outcome, AppError> {
+    cli::ensure_interactive()?;
     let dir = match args.directory.as_ref() {
         Some(directory) => PathBuf::from(directory),
         None => dirs::config_dir()
