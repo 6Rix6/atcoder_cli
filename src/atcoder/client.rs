@@ -1,6 +1,7 @@
 use std::time::Duration;
 
-use reqwest::{Client, Response, redirect::Policy};
+use reqwest::blocking::{Client, Response};
+use reqwest::redirect::Policy;
 
 use crate::{
     atcoder::{
@@ -31,7 +32,7 @@ impl AtCoderClient {
     }
 
     /// Fetch a page from AtCoder using the inner client and cookie.
-    pub async fn fetch_page(&self, url: &str) -> Result<Response, AtcoderError> {
+    pub fn fetch_page(&self, url: &str) -> Result<Response, AtcoderError> {
         let mut request = self.client.get(url);
 
         if let Some(ref cookie_value) = self.cookie {
@@ -41,20 +42,20 @@ impl AtCoderClient {
             }
         }
 
-        request.send().await.map_err(AtcoderError::from)
+        request.send().map_err(AtcoderError::from)
     }
 
     /// Fetch HTML content from the given URL.
-    pub async fn fetch_html(&self, url: &str) -> Result<String, AtcoderError> {
-        let response = self.fetch_page(url).await?;
+    pub fn fetch_html(&self, url: &str) -> Result<String, AtcoderError> {
+        let response = self.fetch_page(url)?;
         let response = response.error_for_status()?;
 
-        response.text().await.map_err(AtcoderError::from)
+        response.text().map_err(AtcoderError::from)
     }
 
     /// Fetch a problem page and extract both its metadata and sample cases.
-    pub async fn get_task(&self, url: &str) -> Result<TaskData, AtcoderError> {
-        let html = self.fetch_html(url).await?;
+    pub fn get_task(&self, url: &str) -> Result<TaskData, AtcoderError> {
+        let html = self.fetch_html(url)?;
         let parser = Parser::new(&html);
         let page = parser.page().ok_or_else(|| AtcoderError::Parse {
             url: url.to_string(),
@@ -67,8 +68,8 @@ impl AtCoderClient {
     }
 
     /// Fetch a problem page and extract its metadata.
-    pub async fn get_page(&self, url: &str) -> Result<TaskPage, AtcoderError> {
-        let html = self.fetch_html(url).await?;
+    pub fn get_page(&self, url: &str) -> Result<TaskPage, AtcoderError> {
+        let html = self.fetch_html(url)?;
 
         Parser::new(&html)
             .page()

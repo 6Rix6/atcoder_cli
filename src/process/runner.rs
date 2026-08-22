@@ -1,12 +1,14 @@
+use std::io::{Read, Write as _};
 use std::process::{ExitStatus, Stdio};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
+use std::thread;
 use std::time::{Duration, Instant};
 use thiserror::Error;
-use tokio::io::AsyncWriteExt;
-use tokio::process::Command;
-use tokio::time::timeout;
 
 #[cfg(unix)]
-use std::os::unix::process::ExitStatusExt;
+use std::os::unix::process::{CommandExt, ExitStatusExt};
 
 /// Holds the result of a single test case execution.
 pub struct RunResult {
@@ -28,7 +30,10 @@ pub enum RunError {
 }
 
 /// Runs the executable with the given input, using GNU time if provided.
-pub async fn run_case(
+///
+/// The child runs in its own session (unix); a watchdog thread kills the whole
+/// group when `time_limit_secs` elapses, which turns into `RunError::Timeout`.
+pub fn run_case(
     run_cmd: &str,
     flags: &[String],
     input_data: &str,
@@ -36,6 +41,7 @@ pub async fn run_case(
     time_limit_secs: u32,
 ) -> Result<RunResult, RunError> {
     let time_limit = Duration::from_secs(u64::from(time_limit_secs.max(1)));
+    let start_time = Instant::now();
 
     // Create a temporary file to store GNU time output if needed
     #[cfg(unix)]
@@ -44,7 +50,7 @@ pub async fn run_case(
         None => None,
     };
 
-    let mut cmd_args = Vec::new();
+    let mut cmd_args: Vec<String> = Vec::new();
     let mut program = run_cmd;
 
     #[cfg(unix)]
@@ -52,7 +58,7 @@ pub async fn run_case(
         && let Some(file) = gnu_time_file.as_ref()
     {
         let file_path = file.path().to_string_lossy().into_owned();
-        cmd_args.extend_from_slice(&[
+        cmd_args.extend([
             "-f".to_string(),
             "%M".to_string(),
             "-o".to_string(),
@@ -63,91 +69,102 @@ pub async fn run_case(
         program = time_path;
     }
 
-    cmd_args.extend_from_slice(flags);
+    cmd_args.extend(flags.iter().cloned());
 
-    let start_time = Instant::now();
-
-    let mut cmd = Command::new(program);
-    cmd.args(&cmd_args)
+    let mut command = std::process::Command::new(program);
+    command
+        .args(&cmd_args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
     #[cfg(unix)]
     unsafe {
-        cmd.pre_exec(|| {
+        command.pre_exec(|| {
             let _ = nix::unistd::setsid();
             Ok(())
         });
     }
 
-    let mut child = cmd.spawn()?;
-    let _pid = child.id();
+    let mut child = command.spawn()?;
+    let pid = child.id();
 
-    // Write to stdin asynchronously
-    if let Some(mut stdin) = child.stdin.take() {
-        let input_bytes = input_data.as_bytes().to_vec();
-        tokio::spawn(async move {
-            let _ = stdin.write_all(&input_bytes).await;
+    // Feed stdin from a thread; the child may exit before reading everything.
+    let stdin_writer = child.stdin.take().map(|mut stdin| {
+        let input = input_data.as_bytes().to_vec();
+        thread::spawn(move || {
+            let _ = stdin.write_all(&input);
+        })
+    });
+
+    // Watchdog: kill the process group once the channel goes silent for the
+    // full time limit. Dropping `done_tx` after the wait disconnects it.
+    let timed_out = Arc::new(AtomicBool::new(false));
+    let (done_tx, done_rx) = mpsc::channel::<()>();
+
+    let watchdog = {
+        let timed_out = Arc::clone(&timed_out);
+        thread::spawn(move || match done_rx.recv_timeout(time_limit) {
+            Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => {}
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                timed_out.store(true, Ordering::SeqCst);
+                #[cfg(unix)]
+                {
+                    use nix::sys::signal::{Signal, killpg};
+                    use nix::unistd::Pid;
+
+                    let _ = killpg(Pid::from_raw(pid as i32), Signal::SIGKILL);
+                }
+            }
+        })
+    };
+
+    let waited = child.wait_with_output();
+
+    drop(done_tx);
+    if let Some(handle) = stdin_writer {
+        let _ = handle.join();
+    }
+    let _ = watchdog.join();
+
+    let output = waited?;
+
+    let mut final_status = output.status;
+    let mut memory_mb = None;
+
+    #[cfg(unix)]
+    if gnu_time.is_some() {
+        // GNU time reports the wrapped command's signal exit as 128+signal.
+        if let Some(code) = output.status.code()
+            && (129..=192).contains(&code)
+        {
+            final_status = ExitStatus::from_raw(code - 128);
+        }
+        if let Some(mut file) = gnu_time_file {
+            let mut content = String::new();
+            let _ = file.read_to_string(&mut content);
+            memory_mb = parse_memory_from_gnu_time(&content);
+        }
+    }
+
+    if timed_out.load(Ordering::SeqCst) {
+        return Err(RunError::Timeout {
+            duration: start_time.elapsed(),
         });
     }
 
-    // Wait for the process with a timeout
-    let wait_future = child.wait_with_output();
-    let result = timeout(time_limit, wait_future).await;
-
-    let duration = start_time.elapsed();
-
-    match result {
-        Ok(Ok(output)) => {
-            let mut final_status = output.status;
-            let mut memory_mb = None;
-
-            #[cfg(unix)]
-            {
-                if gnu_time.is_some() {
-                    if let Some(code) = output.status.code()
-                        && code > 128
-                        && code <= 128 + 64
-                    {
-                        final_status = ExitStatus::from_raw(code - 128);
-                    }
-                    if let Some(mut file) = gnu_time_file {
-                        let mut content = String::new();
-                        let _ = std::io::Read::read_to_string(&mut file, &mut content);
-                        memory_mb = parse_memory_from_gnu_time(&content);
-                    }
-                }
-            }
-
-            if !final_status.success() {
-                let stderr_str = String::from_utf8_lossy(&output.stderr).into_owned();
-                return Err(RunError::RuntimeError {
-                    status: final_status,
-                    stderr: stderr_str.trim().to_string(),
-                });
-            }
-
-            let actual_output = String::from_utf8_lossy(&output.stdout).into_owned();
-            Ok(RunResult {
-                output: actual_output,
-                duration,
-                memory_mb,
-            })
-        }
-        Ok(Err(e)) => Err(RunError::StartFailed(e)),
-        Err(_) => {
-            #[cfg(unix)]
-            if let Some(child_pid) = _pid {
-                let pgid = nix::unistd::Pid::from_raw(child_pid as i32);
-                let _ = nix::sys::signal::killpg(pgid, nix::sys::signal::Signal::SIGKILL);
-            }
-
-            Err(RunError::Timeout {
-                duration: time_limit,
-            })
-        }
+    if !final_status.success() {
+        return Err(RunError::RuntimeError {
+            status: final_status,
+            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        });
     }
+
+    Ok(RunResult {
+        output: String::from_utf8_lossy(&output.stdout).into_owned(),
+        duration: start_time.elapsed(),
+        memory_mb,
+    })
 }
 
 /// Helper function to parse Max RSS (KB) from GNU time output and convert to MB.

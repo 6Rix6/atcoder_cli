@@ -17,7 +17,7 @@ pub struct InitArgs {
     pub directory: Option<String>,
 }
 
-pub async fn init(args: &InitArgs) -> Result<Outcome, AppError> {
+pub fn init(args: &InitArgs) -> Result<Outcome, AppError> {
     cli::ensure_interactive()?;
     let dir = match args.directory.as_ref() {
         Some(directory) => PathBuf::from(directory),

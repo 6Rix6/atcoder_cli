@@ -11,7 +11,7 @@ pub struct DlArgs {
     pub task_id: String,
 }
 
-pub async fn download(args: &DlArgs) -> Result<Outcome, AppError> {
+pub fn download(args: &DlArgs) -> Result<Outcome, AppError> {
     let Some(task_info) = atcoder::utils::get_task_info(&args.task_id) else {
         return Err(AppError::InvalidTask(args.task_id.clone()));
     };
@@ -19,7 +19,7 @@ pub async fn download(args: &DlArgs) -> Result<Outcome, AppError> {
     let cookie = utils::session_cookie()?;
 
     let client = AtCoderClient::new(cookie);
-    let page = client.get_page(&task_info.url).await?;
+    let page = client.get_page(&task_info.url)?;
 
     println!("{}", page.problem_md);
 

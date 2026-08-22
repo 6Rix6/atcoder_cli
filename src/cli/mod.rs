@@ -47,12 +47,12 @@ pub enum Commands {
 /// Runs the requested command and reports its outcome.
 ///
 /// Errors bubble up to `main`, which prints them and selects the exit code.
-pub async fn run(cli: &Cli) -> Result<Outcome, AppError> {
+pub fn run(cli: &Cli) -> Result<Outcome, AppError> {
     match &cli.command {
-        Commands::Test(args) => test::run(args).await,
-        Commands::Auth(args) => auth::handle(args).await,
-        Commands::Init(args) => init::init(args).await,
-        Commands::Download(args) => dl::download(args).await,
+        Commands::Test(args) => test::run(args),
+        Commands::Auth(args) => auth::handle(args),
+        Commands::Init(args) => init::init(args),
+        Commands::Download(args) => dl::download(args),
     }
 }
 

@@ -28,7 +28,7 @@ pub struct TestArgs {
 }
 
 /// Handler for 'acc test <task_id>'
-pub async fn run(args: &TestArgs) -> Result<Outcome, AppError> {
+pub fn run(args: &TestArgs) -> Result<Outcome, AppError> {
     let Some(task_info) = atcoder::utils::get_task_info(&args.task_id) else {
         return Err(AppError::InvalidTask(args.task_id.clone()));
     };
@@ -41,11 +41,11 @@ pub async fn run(args: &TestArgs) -> Result<Outcome, AppError> {
 
     if let Some(compiler_template) = &config.compiler {
         let flags = config.compiler_flags.as_deref().unwrap_or_default();
-        compile(compiler_template, flags, &vars).await?;
+        compile(compiler_template, flags, &vars)?;
     }
 
     let cookie = utils::session_cookie()?;
-    let data = fetch_task_data(&task_info.url, cookie).await?;
+    let data = fetch_task_data(&task_info.url, cookie)?;
 
     if data.samples.is_empty() {
         return Err(atcoder::AtcoderError::NoSamples {
@@ -81,9 +81,7 @@ pub async fn run(args: &TestArgs) -> Result<Outcome, AppError> {
             sample,
             gnu_time_path.as_ref().and_then(|p| p.to_str()),
             data.page.time_limit,
-        )
-        .await?
-        {
+        )? {
             passed += 1;
         }
     }
@@ -109,7 +107,7 @@ fn compare_lines_trimmed(s1: &str, s2: &str) -> bool {
         .eq(s2.lines().map(|l| l.trim()))
 }
 
-async fn compile(
+fn compile(
     compiler_template: &str,
     compiler_flags: &[String],
     vars: &HashMap<&str, &str>,
@@ -122,7 +120,7 @@ async fn compile(
         .map(|f| expand_template(f, vars))
         .collect();
 
-    match compiler::compile(&compiler_command, &compiler_flags).await {
+    match compiler::compile(&compiler_command, &compiler_flags) {
         Ok(()) => {
             spinner.finish(
                 &format!("{}", styles::success(SUCCESS_PREFIX)),
@@ -140,11 +138,11 @@ async fn compile(
     }
 }
 
-async fn fetch_task_data(url: &str, cookie: Option<String>) -> Result<TaskData, AppError> {
+fn fetch_task_data(url: &str, cookie: Option<String>) -> Result<TaskData, AppError> {
     let client = AtCoderClient::new(cookie);
     let spinner = Spinner::new("Fetching samples...");
 
-    match client.get_task(url).await {
+    match client.get_task(url) {
         Ok(val) => {
             spinner.finish(
                 &format!("{}", styles::success("200 OK")),
@@ -169,7 +167,7 @@ async fn fetch_task_data(url: &str, cookie: Option<String>) -> Result<TaskData, 
 /// Runs one sample and prints its verdict. Returns `Ok(true)` on AC.
 ///
 /// `Err` is reserved for system failures that abort the whole run.
-async fn execute_test_case(
+fn execute_test_case(
     case_num: usize,
     run_command: &str,
     run_flags: &[String],
@@ -186,9 +184,7 @@ async fn execute_test_case(
         &sample.input,
         gnu_time,
         time_limit_secs,
-    )
-    .await
-    {
+    ) {
         Ok(result) => {
             info_ln!("time: {}", styles::dim(&format!("{:?}", result.duration)));
 

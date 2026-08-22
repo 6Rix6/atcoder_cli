@@ -4,11 +4,10 @@ use clap::Parser;
 
 use atcoder_cli::cli::{self, Cli, Outcome};
 
-#[tokio::main]
-async fn main() -> ExitCode {
+fn main() -> ExitCode {
     let cli = Cli::parse();
 
-    let outcome = match cli::run(&cli).await {
+    let outcome = match cli::run(&cli) {
         Ok(outcome) => outcome,
         Err(err) => {
             cli::report_error(&err);

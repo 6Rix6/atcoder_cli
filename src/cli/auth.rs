@@ -30,15 +30,15 @@ pub enum AuthCommands {
 }
 
 /// Handler for 'acc auth <subcommand>'
-pub async fn handle(args: &AuthArgs) -> Result<Outcome, AppError> {
+pub fn handle(args: &AuthArgs) -> Result<Outcome, AppError> {
     match &args.subcommand {
-        AuthCommands::Login => login().await,
-        AuthCommands::Logout => logout().await,
-        AuthCommands::Status => status().await,
+        AuthCommands::Login => login(),
+        AuthCommands::Logout => logout(),
+        AuthCommands::Status => status(),
     }
 }
 
-async fn login() -> Result<Outcome, AppError> {
+fn login() -> Result<Outcome, AppError> {
     cli::ensure_interactive()?;
 
     info_ln!("Open AtCoder in your browser and log in.");
@@ -85,7 +85,7 @@ async fn login() -> Result<Outcome, AppError> {
     }
 }
 
-async fn logout() -> Result<Outcome, AppError> {
+fn logout() -> Result<Outcome, AppError> {
     let path = get_cookie_path()?;
 
     if !path.exists() {
@@ -102,7 +102,7 @@ async fn logout() -> Result<Outcome, AppError> {
     Ok(Outcome::Success)
 }
 
-async fn status() -> Result<Outcome, AppError> {
+fn status() -> Result<Outcome, AppError> {
     let path = get_cookie_path()?;
 
     if !path.exists() || !path.is_file() {
@@ -130,10 +130,7 @@ async fn status() -> Result<Outcome, AppError> {
     let spinner = Spinner::new("Testing cookie...");
     let client = AtCoderClient::new(Some(cookie));
 
-    match client
-        .fetch_page("https://atcoder.jp/contests/abc001/submit")
-        .await
-    {
+    match client.fetch_page("https://atcoder.jp/contests/abc001/submit") {
         Ok(response) => {
             let status = response.status();
 
