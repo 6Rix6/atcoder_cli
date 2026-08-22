@@ -57,14 +57,14 @@ pub async fn run(args: &TestArgs) {
         std::process::exit(1);
     };
 
-    print!("\n");
+    println!();
 
     let gnu_time_path = get_gnu_time_path();
     if gnu_time_path.is_none() {
         warn_ln!("GNU time is not available. Memory usage will not be measured.");
     }
 
-    print!("\n");
+    println!();
 
     let mut passed = 0;
     let run_command = expand_template(&config.run, &vars);
@@ -208,7 +208,7 @@ async fn execute_test_case(
         }
     }
 
-    print!("\n");
+    println!();
     is_ac
 }
 

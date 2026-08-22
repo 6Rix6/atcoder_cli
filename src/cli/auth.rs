@@ -50,7 +50,7 @@ pub async fn handle(args: &AuthArgs) {
             let storage = CookieStorage::new(&path);
             let result = storage.set(REVEL_SESSION, &input);
 
-            print!("\n");
+            println!();
 
             match result {
                 Ok(_) => {

@@ -8,16 +8,16 @@ async fn main() {
 
     match &cli.command {
         Commands::Test(args) => {
-            cli::test::run(&args).await;
+            cli::test::run(args).await;
         }
         Commands::Auth(args) => {
-            cli::auth::handle(&args).await;
+            cli::auth::handle(args).await;
         }
         Commands::Init(args) => {
-            cli::init::init(&args).await;
+            cli::init::init(args).await;
         }
         Commands::Download(args) => {
-            cli::dl::download(&args).await;
+            cli::dl::download(args).await;
         }
     }
 }

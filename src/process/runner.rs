@@ -99,11 +99,10 @@ pub async fn run_case(
             #[cfg(unix)]
             {
                 if gnu_time.is_some() {
-                    if let Some(code) = output.status.code() {
-                        if code > 128 && code <= 128 + 64 {
+                    if let Some(code) = output.status.code()
+                        && code > 128 && code <= 128 + 64 {
                             final_status = ExitStatus::from_raw(code - 128);
                         }
-                    }
                     if let Some(mut file) = gnu_time_file {
                         let mut content = String::new();
                         let _ = std::io::Read::read_to_string(&mut file, &mut content);
@@ -145,10 +144,9 @@ pub async fn run_case(
 fn parse_memory_from_gnu_time(output: &str) -> Option<f64> {
     let last_line = output.lines().last()?;
     let trimmed = last_line.trim();
-    if !trimmed.is_empty() && trimmed.chars().all(|c| c.is_ascii_digit()) {
-        if let Ok(kb) = trimmed.parse::<f64>() {
+    if !trimmed.is_empty() && trimmed.chars().all(|c| c.is_ascii_digit())
+        && let Ok(kb) = trimmed.parse::<f64>() {
             return Some(kb / 1024.0);
         }
-    }
     None
 }

@@ -397,8 +397,8 @@ impl Theme for DialogTheme {
             }
         )?;
 
-        if highlight_matches {
-            if let Some((_score, indices)) = matcher.fuzzy_indices(text, search_term) {
+        if highlight_matches
+            && let Some((_score, indices)) = matcher.fuzzy_indices(text, search_term) {
                 for (idx, c) in text.chars().enumerate() {
                     if indices.contains(&idx) {
                         if active {
@@ -420,7 +420,6 @@ impl Theme for DialogTheme {
 
                 return Ok(());
             }
-        }
 
         write!(f, "{}", text)
     }

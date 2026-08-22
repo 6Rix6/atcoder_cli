@@ -36,7 +36,7 @@ pub struct VarHandlerFactory;
 
 impl TagHandlerFactory for VarHandlerFactory {
     fn instantiate(&self) -> Box<dyn TagHandler> {
-        return Box::new(VarHandler {});
+        Box::new(VarHandler {})
     }
 }
 

@@ -7,7 +7,7 @@ pub fn get_cookie_path() -> PathBuf {
     config_path.push(CONFIG_DIR_NAME);
     config_path.push(COOKIE_FILE_NAME);
 
-    return config_path;
+    config_path
 }
 
 
