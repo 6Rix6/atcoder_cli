@@ -147,3 +147,133 @@ impl Parser {
         Some((time_limit, memory_limit))
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    const JA_PROBLEM_HTML: &str = r#"
+<html><body>
+<div id="main-container">
+  <span class="h2">A - Past ABCs</span>
+  <div id="task-statement">
+    <span class="lang-ja">
+      <p>実行時間制限: 2 sec / メモリ制限: 1024 MiB</p>
+      <div class="part"><section><h3>問題文</h3><p>長さ 6 の文字列 S が与えられます。</p></section></div>
+      <div class="part"><section><h3>入力例 <var>1</var></h3><pre>ABC349</pre></section></div>
+      <div class="part"><section><h3>出力例 <var>1</var></h3><pre>ABC350</pre></section></div>
+      <div class="part"><section><h3>入力例 <var>2</var></h3><pre>ABC315</pre></section></div>
+      <div class="part"><section><h3>出力例 <var>2</var></h3><pre>ABC316</pre></section></div>
+    </span>
+  </div>
+</div>
+</body></html>
+"#;
+
+    #[test]
+    fn extracts_samples_from_japanese_page() {
+        let parser = Parser::new(JA_PROBLEM_HTML);
+        let samples = parser.samples();
+
+        assert_eq!(samples.len(), 2);
+        assert_eq!(samples[0].input, "ABC349");
+        assert_eq!(samples[0].output, "ABC350");
+        assert_eq!(samples[1].input, "ABC315");
+        assert_eq!(samples[1].output, "ABC316");
+    }
+
+    #[test]
+    fn extracts_samples_from_english_page() {
+        let html = r#"
+<html><body>
+<div id="main-container">
+  <span class="h2">A - Problem</span>
+  <div id="task-statement">
+    <span class="lang-en">
+      <div class="part"><section><h3>Sample Input <var>1</var></h3><pre>1 2</pre></section></div>
+      <div class="part"><section><h3>Sample Output <var>1</var></h3><pre>3</pre></section></div>
+    </span>
+  </div>
+</div>
+</body></html>
+"#;
+
+        let parser = Parser::new(html);
+        let samples = parser.samples();
+
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].input, "1 2");
+        assert_eq!(samples[0].output, "3");
+    }
+
+    #[test]
+    fn ignores_unrelated_parts_and_dangling_input() {
+        let html = r#"
+<html><body>
+<div id="main-container">
+  <div id="task-statement">
+    <span class="lang-ja">
+      <div class="part"><section><h3>問題文</h3><p>本文。</p></section></div>
+      <div class="part"><section><h3>入力</h3><p>入力の説明。</p></section></div>
+      <div class="part"><section><h3>出力</h3><p>出力の説明。</p></section></div>
+      <div class="part"><section><h3>入力例 <var>1</var></h3><pre>x</pre></section></div>
+    </span>
+  </div>
+</div>
+</body></html>
+"#;
+
+        let parser = Parser::new(html);
+        assert!(parser.samples().is_empty());
+    }
+
+    #[test]
+    fn parses_page_metadata() {
+        let parser = Parser::new(JA_PROBLEM_HTML);
+        let page = parser.page().expect("page should be parsed");
+
+        assert_eq!(page.title, "A - Past ABCs");
+        assert_eq!(page.time_limit, 2);
+        assert_eq!(page.memory_limit, 1024);
+        assert!(page.problem_md.starts_with("## A - Past ABCs"));
+    }
+
+    #[test]
+    fn page_is_none_without_main_container() {
+        let parser = Parser::new("<html><body><p>hello</p></body></html>");
+        assert!(parser.page().is_none());
+        assert!(parser.samples().is_empty());
+    }
+
+    #[test]
+    fn falls_back_to_default_limits_when_missing() {
+        let html = r#"
+<html><body>
+<div id="main-container">
+  <span class="h2">B - No Limits</span>
+  <div id="task-statement"><span class="lang-ja"><p>制限の記載なし。</p></span></div>
+</div>
+</body></html>
+"#;
+
+        let parser = Parser::new(html);
+        let page = parser.page().expect("page should be parsed");
+
+        assert_eq!(page.time_limit, 2);
+        assert_eq!(page.memory_limit, 1024);
+    }
+
+    #[test]
+    fn extracts_limits_in_both_languages() {
+        assert_eq!(
+            Parser::extract_limits("実行時間制限: 10 sec / メモリ制限: 256 MiB"),
+            Some((10, 256))
+        );
+        assert_eq!(
+            Parser::extract_limits("Time Limit: 1 sec / Memory Limit: 2048 MiB"),
+            Some((1, 2048))
+        );
+        assert_eq!(Parser::extract_limits("no limits here"), None);
+    }
+}

@@ -163,3 +163,27 @@ fn parse_memory_from_gnu_time(output: &str) -> Option<f64> {
     }
     None
 }
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::parse_memory_from_gnu_time;
+
+    #[test]
+    fn parses_last_line_as_kib() {
+        assert_eq!(parse_memory_from_gnu_time("4096\n"), Some(4.0));
+        // GNU time -f はコマンド出力の後に値の行を出力する
+        assert_eq!(
+            parse_memory_from_gnu_time("program stdout\n8192"),
+            Some(8.0)
+        );
+    }
+
+    #[test]
+    fn rejects_non_numeric_output() {
+        assert_eq!(parse_memory_from_gnu_time(""), None);
+        assert_eq!(parse_memory_from_gnu_time("\n"), None);
+        assert_eq!(parse_memory_from_gnu_time("not a number"), None);
+        assert_eq!(parse_memory_from_gnu_time("12.5"), None);
+        assert_eq!(parse_memory_from_gnu_time("-1\n"), None);
+    }
+}

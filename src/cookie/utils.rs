@@ -20,3 +20,36 @@ pub fn is_valid_session_value(value: &str) -> bool {
             )
         })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_typical_session_values() {
+        assert!(is_valid_session_value("abcXYZ123"));
+        assert!(is_valid_session_value("with-dash_under.dot~plus+eq=sign"));
+        assert!(is_valid_session_value("%2Fencoded%20value"));
+        assert!(is_valid_session_value("a"));
+    }
+
+    #[test]
+    fn rejects_header_breaking_values() {
+        assert!(!is_valid_session_value(""));
+        assert!(!is_valid_session_value("has space"));
+        assert!(!is_valid_session_value("semi;colon"));
+        assert!(!is_valid_session_value("com,ma"));
+        assert!(!is_valid_session_value("quo\"te"));
+        assert!(!is_valid_session_value("back\\slash"));
+        // 改行・制御文字はヘッダインジェクションになる
+        assert!(!is_valid_session_value("new\nline"));
+        assert!(!is_valid_session_value("tab\there"));
+        assert!(!is_valid_session_value("\u{7f}del"));
+    }
+
+    #[test]
+    fn rejects_non_ascii() {
+        assert!(!is_valid_session_value("日本語"));
+        assert!(!is_valid_session_value("café"));
+    }
+}

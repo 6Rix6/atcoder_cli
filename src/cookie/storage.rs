@@ -133,3 +133,87 @@ impl CookieStorage {
         })
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn storage_in(dir: &TempDir) -> CookieStorage {
+        CookieStorage::new(dir.path().join("cookies.txt"))
+    }
+
+    #[test]
+    fn set_and_get_roundtrip() {
+        let dir = TempDir::new().unwrap();
+        let storage = storage_in(&dir);
+
+        storage.set("REVEL_SESSION", "secret-value").unwrap();
+        assert_eq!(
+            storage.get("REVEL_SESSION").unwrap(),
+            Some("secret-value".to_string())
+        );
+
+        // 上書き
+        storage.set("REVEL_SESSION", "rotated").unwrap();
+        assert_eq!(
+            storage.get("REVEL_SESSION").unwrap(),
+            Some("rotated".to_string())
+        );
+
+        // 未登録キー
+        assert_eq!(storage.get("OTHER").unwrap(), None);
+    }
+
+    #[test]
+    fn missing_file_reads_as_empty() {
+        let dir = TempDir::new().unwrap();
+        let storage = storage_in(&dir);
+
+        assert_eq!(storage.get("REVEL_SESSION").unwrap(), None);
+    }
+
+    #[test]
+    fn skips_comments_blank_lines_and_malformed_lines() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("cookies.txt");
+        std::fs::write(
+            &path,
+            "# comment\n\n  \nA=1\ngarbage without equals\nB = 2 \n",
+        )
+        .unwrap();
+
+        let storage = CookieStorage::new(&path);
+        let cookies = storage.load().unwrap();
+
+        assert_eq!(cookies.get("A").map(String::as_str), Some("1"));
+        assert_eq!(cookies.get("B").map(String::as_str), Some("2"));
+        assert_eq!(cookies.len(), 2);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn file_is_owner_only_after_save() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("cookies.txt");
+
+        // 緩い権限で事前作成しても保存時に0600へ締められる
+        std::fs::write(&path, "REVEL_SESSION=old\n").unwrap();
+        std::fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+
+        let storage = CookieStorage::new(&path);
+        storage.set("NEW", "value").unwrap();
+
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+
+        // 既存エントリは保持される
+        assert_eq!(
+            storage.get("REVEL_SESSION").unwrap(),
+            Some("old".to_string())
+        );
+    }
+}
