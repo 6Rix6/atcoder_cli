@@ -114,11 +114,7 @@ impl Theme for DialogTheme {
         write!(
             f,
             "{}",
-            format_ln!(
-                &self.error_prefix,
-                "{} ",
-                self.error_style.apply_to(err)
-            ),
+            format_ln!(&self.error_prefix, "{} ", self.error_style.apply_to(err)),
         )
     }
 
@@ -398,28 +394,29 @@ impl Theme for DialogTheme {
         )?;
 
         if highlight_matches
-            && let Some((_score, indices)) = matcher.fuzzy_indices(text, search_term) {
-                for (idx, c) in text.chars().enumerate() {
-                    if indices.contains(&idx) {
-                        if active {
-                            write!(
-                                f,
-                                "{}",
-                                self.active_item_style
-                                    .apply_to(self.fuzzy_match_highlight_style.apply_to(c))
-                            )?;
-                        } else {
-                            write!(f, "{}", self.fuzzy_match_highlight_style.apply_to(c))?;
-                        }
-                    } else if active {
-                        write!(f, "{}", self.active_item_style.apply_to(c))?;
+            && let Some((_score, indices)) = matcher.fuzzy_indices(text, search_term)
+        {
+            for (idx, c) in text.chars().enumerate() {
+                if indices.contains(&idx) {
+                    if active {
+                        write!(
+                            f,
+                            "{}",
+                            self.active_item_style
+                                .apply_to(self.fuzzy_match_highlight_style.apply_to(c))
+                        )?;
                     } else {
-                        write!(f, "{}", c)?;
+                        write!(f, "{}", self.fuzzy_match_highlight_style.apply_to(c))?;
                     }
+                } else if active {
+                    write!(f, "{}", self.active_item_style.apply_to(c))?;
+                } else {
+                    write!(f, "{}", c)?;
                 }
-
-                return Ok(());
             }
+
+            return Ok(());
+        }
 
         write!(f, "{}", text)
     }

@@ -25,12 +25,12 @@ fn load_config(path: &Path) -> Result<Option<Config>, ConfigError> {
             path: path.to_path_buf(),
             source: e,
         })?;
-        
+
         toml::from_str(&toml_str)
             .map(Some)
-            .map_err(|e| ConfigError::Parse { 
-                path: path.to_path_buf(), 
-                source: e 
+            .map_err(|e| ConfigError::Parse {
+                path: path.to_path_buf(),
+                source: e,
             })
     } else {
         Ok(None)

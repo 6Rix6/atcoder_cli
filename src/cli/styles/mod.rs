@@ -29,5 +29,5 @@ pub const INFO_PREFIX: &str = "*";
 #[macro_use]
 pub mod macros;
 
-pub mod spinner;
 pub mod dialog_theme;
+pub mod spinner;
