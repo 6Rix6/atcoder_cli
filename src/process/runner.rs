@@ -8,7 +8,8 @@ use tokio::time::timeout;
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
 
-const DEFAULT_TIMEOUT_SECS: u64 = 3;
+/// Fallback time limit (seconds) used when the problem page does not declare one.
+pub const DEFAULT_TIME_LIMIT_SECS: u32 = 3;
 
 /// Holds the result of a single test case execution.
 pub struct RunResult {
@@ -35,8 +36,9 @@ pub async fn run_case(
     flags: &[String],
     input_data: &str,
     gnu_time: Option<&str>,
+    time_limit_secs: u32,
 ) -> Result<RunResult, RunError> {
-    let time_limit = Duration::from_secs(DEFAULT_TIMEOUT_SECS);
+    let time_limit = Duration::from_secs(u64::from(time_limit_secs.max(1)));
 
     // Create a temporary file to store GNU time output if needed
     #[cfg(unix)]
@@ -50,8 +52,19 @@ pub async fn run_case(
 
     #[cfg(unix)]
     if let Some(time_path) = gnu_time {
-        let file_path = gnu_time_file.as_ref().unwrap().path().to_string_lossy().into_owned();
-        cmd_args.extend_from_slice(&["-f".to_string(), "%M".to_string(), "-o".to_string(), file_path, "--".to_string()]);
+        let file_path = gnu_time_file
+            .as_ref()
+            .unwrap()
+            .path()
+            .to_string_lossy()
+            .into_owned();
+        cmd_args.extend_from_slice(&[
+            "-f".to_string(),
+            "%M".to_string(),
+            "-o".to_string(),
+            file_path,
+            "--".to_string(),
+        ]);
         cmd_args.push(run_cmd.to_string());
         program = time_path;
     }
@@ -100,9 +113,11 @@ pub async fn run_case(
             {
                 if gnu_time.is_some() {
                     if let Some(code) = output.status.code()
-                        && code > 128 && code <= 128 + 64 {
-                            final_status = ExitStatus::from_raw(code - 128);
-                        }
+                        && code > 128
+                        && code <= 128 + 64
+                    {
+                        final_status = ExitStatus::from_raw(code - 128);
+                    }
                     if let Some(mut file) = gnu_time_file {
                         let mut content = String::new();
                         let _ = std::io::Read::read_to_string(&mut file, &mut content);
@@ -134,7 +149,9 @@ pub async fn run_case(
                 let _ = nix::sys::signal::killpg(pgid, nix::sys::signal::Signal::SIGKILL);
             }
 
-            Err(RunError::Timeout { duration: time_limit })
+            Err(RunError::Timeout {
+                duration: time_limit,
+            })
         }
     }
 }
@@ -144,9 +161,11 @@ pub async fn run_case(
 fn parse_memory_from_gnu_time(output: &str) -> Option<f64> {
     let last_line = output.lines().last()?;
     let trimmed = last_line.trim();
-    if !trimmed.is_empty() && trimmed.chars().all(|c| c.is_ascii_digit())
-        && let Ok(kb) = trimmed.parse::<f64>() {
-            return Some(kb / 1024.0);
-        }
+    if !trimmed.is_empty()
+        && trimmed.chars().all(|c| c.is_ascii_digit())
+        && let Ok(kb) = trimmed.parse::<f64>()
+    {
+        return Some(kb / 1024.0);
+    }
     None
 }

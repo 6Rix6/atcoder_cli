@@ -3,7 +3,11 @@ use std::collections::HashMap;
 use clap::Args;
 
 use crate::{
-    atcoder::{self, client::AtCoderClient, models::SampleInput},
+    atcoder::{
+        self,
+        client::AtCoderClient,
+        models::{SampleInput, TaskData},
+    },
     cli::{
         styles::{self, ERROR_PREFIX, SUCCESS_PREFIX, spinner::Spinner},
         utils,
@@ -53,9 +57,14 @@ pub async fn run(args: &TestArgs) {
 
     let cookie = utils::get_revel_session();
 
-    let Some(samples) = fetch_samples(&task_info.url, cookie).await else {
+    let Some(data) = fetch_task_data(&task_info.url, cookie).await else {
         std::process::exit(1);
     };
+
+    if data.samples.is_empty() {
+        failed_ln!("No sample cases found. The problem page may have changed.");
+        std::process::exit(1);
+    }
 
     println!();
 
@@ -76,13 +85,20 @@ pub async fn run(args: &TestArgs) {
         .map(|f| expand_template(f, &vars))
         .collect();
 
-    for (i, sample) in samples.iter().enumerate() {
+    let time_limit_secs = data
+        .page
+        .as_ref()
+        .map(|p| p.time_limit)
+        .unwrap_or(runner::DEFAULT_TIME_LIMIT_SECS);
+
+    for (i, sample) in data.samples.iter().enumerate() {
         if execute_test_case(
             i + 1,
             &run_command,
             &run_flags,
             sample,
             gnu_time_path.as_ref().and_then(|p| p.to_str()),
+            time_limit_secs,
         )
         .await
         {
@@ -90,7 +106,7 @@ pub async fn run(args: &TestArgs) {
         }
     }
 
-    if passed == samples.len() {
+    if passed == data.samples.len() {
         success_ln!("Test {}", styles::success("succeeded"));
         info_ln!("Submit here: {}", &task_info.submit_url);
     } else {
@@ -98,8 +114,9 @@ pub async fn run(args: &TestArgs) {
             "Test {}: {}/{} passed",
             styles::error("failed"),
             passed,
-            samples.len()
+            data.samples.len()
         );
+        std::process::exit(1);
     }
 }
 
@@ -138,15 +155,15 @@ async fn compile(
     Ok(())
 }
 
-async fn fetch_samples(url: &str, cookie: Option<String>) -> Option<Vec<SampleInput>> {
+async fn fetch_task_data(url: &str, cookie: Option<String>) -> Option<TaskData> {
     let client = AtCoderClient::new(cookie);
     let spinner = Spinner::new("Fetching samples...");
 
-    match client.get_samples(url).await {
+    match client.get_task(url).await {
         Ok(val) => {
             spinner.finish(
                 &format!("{}", styles::success("200 OK")),
-                &format!("{} sample(s) fetched.", val.len()),
+                &format!("{} sample(s) fetched.", val.samples.len()),
             );
             Some(val)
         }
@@ -170,11 +187,20 @@ async fn execute_test_case(
     run_flags: &[String],
     sample: &SampleInput,
     gnu_time: Option<&str>,
+    time_limit_secs: u32,
 ) -> bool {
     info_ln!("Sample #{}", case_num);
     let mut is_ac = false;
 
-    match runner::run_case(run_command, run_flags, &sample.input, gnu_time).await {
+    match runner::run_case(
+        run_command,
+        run_flags,
+        &sample.input,
+        gnu_time,
+        time_limit_secs,
+    )
+    .await
+    {
         Ok(result) => {
             info_ln!("time: {}", styles::dim(&format!("{:?}", result.duration)));
 

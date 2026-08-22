@@ -1,11 +1,14 @@
+use std::time::Duration;
+
 use reqwest::{Client, Response, redirect::Policy};
 
 use crate::{
     atcoder::{
-        models::{SampleInput, TaskPage},
+        models::{TaskData, TaskPage},
         parser::Parser,
     },
-    constants::REVEL_SESSION,
+    constants::{ATCODER_HTTP_TIMEOUT_SECS, REVEL_SESSION},
+    cookie::utils::is_valid_session_value,
 };
 
 /// A client dedicated to interacting with AtCoder.
@@ -19,6 +22,7 @@ impl AtCoderClient {
     pub fn new(cookie: Option<String>) -> Self {
         let client = Client::builder()
             .redirect(Policy::none())
+            .timeout(Duration::from_secs(ATCODER_HTTP_TIMEOUT_SECS))
             .build()
             .unwrap_or_default();
 
@@ -30,7 +34,10 @@ impl AtCoderClient {
         let mut request = self.client.get(url);
 
         if let Some(ref cookie_value) = self.cookie {
-            request = request.header("Cookie", format!("{}={};", REVEL_SESSION, cookie_value));
+            // Skip malformed values instead of panicking inside reqwest.
+            if is_valid_session_value(cookie_value) {
+                request = request.header("Cookie", format!("{}={};", REVEL_SESSION, cookie_value));
+            }
         }
 
         request.send().await
@@ -44,13 +51,15 @@ impl AtCoderClient {
         response.text().await
     }
 
-    /// Fetch and return all sample input/output pairs for the given problem.
-    pub async fn get_samples(&self, url: &str) -> Result<Vec<SampleInput>, reqwest::Error> {
+    /// Fetch a problem page and extract both its metadata and sample cases.
+    pub async fn get_task(&self, url: &str) -> Result<TaskData, reqwest::Error> {
         let html = self.fetch_html(url).await?;
         let parser = Parser::new(&html);
-        let samples = parser.samples();
 
-        Ok(samples)
+        Ok(TaskData {
+            page: parser.page(),
+            samples: parser.samples(),
+        })
     }
 
     pub async fn get_page(&self, url: &str) -> Result<Option<TaskPage>, reqwest::Error> {

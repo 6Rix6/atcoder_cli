@@ -15,6 +15,12 @@ pub struct TaskPage {
 }
 
 #[derive(Debug, Clone)]
+pub struct TaskData {
+    pub page: Option<TaskPage>,
+    pub samples: Vec<SampleInput>,
+}
+
+#[derive(Debug, Clone)]
 pub struct TaskInfo {
     pub url: String,
     pub submit_url: String,
