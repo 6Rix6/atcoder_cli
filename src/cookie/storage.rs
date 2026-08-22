@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
 #[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+use crate::cookie::error::CookieError;
 
 /// Owner read/write only (0600); the file stores a session credential.
 const COOKIE_FILE_MODE: u32 = 0o600;
@@ -22,15 +24,18 @@ impl CookieStorage {
     }
 
     /// Helper to ensure the parent directories exist before writing.
-    fn ensure_directory(&self) -> io::Result<()> {
+    fn ensure_directory(&self) -> Result<(), CookieError> {
         if let Some(parent) = self.file_path.parent() {
-            fs::create_dir_all(parent)?;
+            fs::create_dir_all(parent).map_err(|source| CookieError::Write {
+                path: parent.to_path_buf(),
+                source,
+            })?;
         }
         Ok(())
     }
 
     /// Reads all cookies from the file into a HashMap.
-    pub fn load(&self) -> io::Result<HashMap<String, String>> {
+    pub fn load(&self) -> Result<HashMap<String, String>, CookieError> {
         let mut cookies = HashMap::new();
 
         // If the file doesn't exist yet, return an empty map
@@ -38,11 +43,17 @@ impl CookieStorage {
             return Ok(cookies);
         }
 
-        let file = File::open(&self.file_path)?;
+        let file = File::open(&self.file_path).map_err(|source| CookieError::Read {
+            path: self.file_path.clone(),
+            source,
+        })?;
         let reader = BufReader::new(file);
 
         for line in reader.lines() {
-            let line = line?;
+            let line = line.map_err(|source| CookieError::Read {
+                path: self.file_path.clone(),
+                source,
+            })?;
             let trimmed = line.trim();
 
             // Skip empty lines or comments
@@ -60,19 +71,35 @@ impl CookieStorage {
     }
 
     /// Saves all cookies from a HashMap back into the file.
-    pub fn save(&self, cookies: &HashMap<String, String>) -> io::Result<()> {
+    pub fn save(&self, cookies: &HashMap<String, String>) -> Result<(), CookieError> {
         self.ensure_directory()?;
         let mut file = self.open_private_file()?;
 
         for (key, value) in cookies {
-            writeln!(file, "{}={}", key, value)?;
+            writeln!(file, "{}={}", key, value).map_err(|source| CookieError::Write {
+                path: self.file_path.clone(),
+                source,
+            })?;
         }
 
         Ok(())
     }
 
+    /// Utility to get a single cookie value by key.
+    pub fn get(&self, key: &str) -> Result<Option<String>, CookieError> {
+        let cookies = self.load()?;
+        Ok(cookies.get(key).cloned())
+    }
+
+    /// Utility to set or update a single cookie key=value.
+    pub fn set(&self, key: &str, value: &str) -> Result<(), CookieError> {
+        let mut cookies = self.load()?;
+        cookies.insert(key.to_string(), value.to_string());
+        self.save(&cookies)
+    }
+
     /// Opens the cookie file for writing with owner-only permissions.
-    fn open_private_file(&self) -> io::Result<File> {
+    fn open_private_file(&self) -> Result<File, CookieError> {
         #[cfg(unix)]
         {
             let file = OpenOptions::new()
@@ -80,31 +107,29 @@ impl CookieStorage {
                 .create(true)
                 .truncate(true)
                 .mode(COOKIE_FILE_MODE)
-                .open(&self.file_path)?;
+                .open(&self.file_path)
+                .map_err(|source| CookieError::Write {
+                    path: self.file_path.clone(),
+                    source,
+                })?;
 
             // Harden the mode even when the file already existed with looser permissions.
             fs::set_permissions(
                 &self.file_path,
                 fs::Permissions::from_mode(COOKIE_FILE_MODE),
-            )?;
+            )
+            .map_err(|source| CookieError::Write {
+                path: self.file_path.clone(),
+                source,
+            })?;
 
             Ok(file)
         }
 
         #[cfg(not(unix))]
-        File::create(&self.file_path)
-    }
-
-    /// Utility to get a single cookie value by key.
-    pub fn get(&self, key: &str) -> io::Result<Option<String>> {
-        let cookies = self.load()?;
-        Ok(cookies.get(key).cloned())
-    }
-
-    /// Utility to set or update a single cookie key=value.
-    pub fn set(&self, key: &str, value: &str) -> io::Result<()> {
-        let mut cookies = self.load()?;
-        cookies.insert(key.to_string(), value.to_string());
-        self.save(&cookies)
+        File::create(&self.file_path).map_err(|source| CookieError::Write {
+            path: self.file_path.clone(),
+            source,
+        })
     }
 }
