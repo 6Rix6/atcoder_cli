@@ -1,7 +1,13 @@
 use std::collections::HashMap;
-use std::fs::{self, File};
-use std::io::{self, Write, BufRead, BufReader};
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
+
+#[cfg(unix)]
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+/// Owner read/write only (0600); the file stores a session credential.
+const COOKIE_FILE_MODE: u32 = 0o600;
 
 pub struct CookieStorage {
     file_path: PathBuf,
@@ -38,7 +44,7 @@ impl CookieStorage {
         for line in reader.lines() {
             let line = line?;
             let trimmed = line.trim();
-            
+
             // Skip empty lines or comments
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
@@ -56,13 +62,37 @@ impl CookieStorage {
     /// Saves all cookies from a HashMap back into the file.
     pub fn save(&self, cookies: &HashMap<String, String>) -> io::Result<()> {
         self.ensure_directory()?;
-        let mut file = File::create(&self.file_path)?;
+        let mut file = self.open_private_file()?;
 
         for (key, value) in cookies {
             writeln!(file, "{}={}", key, value)?;
         }
 
         Ok(())
+    }
+
+    /// Opens the cookie file for writing with owner-only permissions.
+    fn open_private_file(&self) -> io::Result<File> {
+        #[cfg(unix)]
+        {
+            let file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(COOKIE_FILE_MODE)
+                .open(&self.file_path)?;
+
+            // Harden the mode even when the file already existed with looser permissions.
+            fs::set_permissions(
+                &self.file_path,
+                fs::Permissions::from_mode(COOKIE_FILE_MODE),
+            )?;
+
+            Ok(file)
+        }
+
+        #[cfg(not(unix))]
+        File::create(&self.file_path)
     }
 
     /// Utility to get a single cookie value by key.
@@ -78,4 +108,3 @@ impl CookieStorage {
         self.save(&cookies)
     }
 }
-

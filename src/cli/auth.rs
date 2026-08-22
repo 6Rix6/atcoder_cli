@@ -40,15 +40,27 @@ pub async fn handle(args: &AuthArgs) {
             let input = Input::<String>::with_theme(&DialogTheme::default())
                 .with_prompt(REVEL_SESSION)
                 .report(false)
+                .validate_with(|input: &String| {
+                    if cookie::utils::is_valid_session_value(input.trim()) {
+                        Ok(())
+                    } else {
+                        Err(
+                            "Value must be non-empty printable ASCII (no spaces or symbols \
+                            that are invalid in a cookie value).",
+                        )
+                    }
+                })
                 .interact()
                 .unwrap_or_else(|e| {
                     error_ln!("An error occurred: {}", e);
                     std::process::exit(1);
                 });
 
+            let input = input.trim();
+
             let path = cookie::utils::get_cookie_path();
             let storage = CookieStorage::new(&path);
-            let result = storage.set(REVEL_SESSION, &input);
+            let result = storage.set(REVEL_SESSION, input);
 
             println!();
 
