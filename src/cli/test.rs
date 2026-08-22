@@ -9,10 +9,12 @@ use crate::{
         models::{SampleInput, TaskData},
     },
     cli::{
+        Outcome,
         styles::{self, ERROR_PREFIX, SUCCESS_PREFIX, spinner::Spinner},
         utils,
     },
-    config::{self, error::ConfigError, models::Config},
+    config::{self, models::Config},
+    error::AppError,
     process::{
         compiler,
         runner::{self, RunError},
@@ -26,44 +28,30 @@ pub struct TestArgs {
 }
 
 /// Handler for 'acc test <task_id>'
-pub async fn run(args: &TestArgs) {
+pub async fn run(args: &TestArgs) -> Result<Outcome, AppError> {
     let Some(task_info) = atcoder::utils::get_task_info(&args.task_id) else {
-        error_ln!("Invalid task URL or ID.");
-        std::process::exit(1);
+        return Err(AppError::InvalidTask(args.task_id.clone()));
     };
 
     success_ln!("Running for task: {}", styles::success(&task_info.task_id));
 
-    let config = match load_config() {
-        Ok(Some(config)) => config,
-        Ok(None) => {
-            error_ln!("No config file found.");
-            std::process::exit(1);
-        }
-        Err(e) => {
-            error_ln!("{}", e);
-            std::process::exit(1);
-        }
-    };
+    let config = load_config()?.ok_or(AppError::NoConfig)?;
 
     let vars = task_info.to_map();
 
     if let Some(compiler_template) = &config.compiler {
         let flags = config.compiler_flags.as_deref().unwrap_or_default();
-        if compile(compiler_template, flags, &vars).await.is_err() {
-            std::process::exit(1);
-        }
+        compile(compiler_template, flags, &vars).await?;
     }
 
-    let cookie = utils::get_revel_session();
-
-    let Some(data) = fetch_task_data(&task_info.url, cookie).await else {
-        std::process::exit(1);
-    };
+    let cookie = utils::session_cookie()?;
+    let data = fetch_task_data(&task_info.url, cookie).await?;
 
     if data.samples.is_empty() {
-        failed_ln!("No sample cases found. The problem page may have changed.");
-        std::process::exit(1);
+        return Err(atcoder::AtcoderError::NoSamples {
+            url: task_info.url.clone(),
+        }
+        .into());
     }
 
     println!();
@@ -85,12 +73,6 @@ pub async fn run(args: &TestArgs) {
         .map(|f| expand_template(f, &vars))
         .collect();
 
-    let time_limit_secs = data
-        .page
-        .as_ref()
-        .map(|p| p.time_limit)
-        .unwrap_or(runner::DEFAULT_TIME_LIMIT_SECS);
-
     for (i, sample) in data.samples.iter().enumerate() {
         if execute_test_case(
             i + 1,
@@ -98,9 +80,9 @@ pub async fn run(args: &TestArgs) {
             &run_flags,
             sample,
             gnu_time_path.as_ref().and_then(|p| p.to_str()),
-            time_limit_secs,
+            data.page.time_limit,
         )
-        .await
+        .await?
         {
             passed += 1;
         }
@@ -109,6 +91,7 @@ pub async fn run(args: &TestArgs) {
     if passed == data.samples.len() {
         success_ln!("Test {}", styles::success("succeeded"));
         info_ln!("Submit here: {}", &task_info.submit_url);
+        Ok(Outcome::Success)
     } else {
         failed_ln!(
             "Test {}: {}/{} passed",
@@ -116,7 +99,7 @@ pub async fn run(args: &TestArgs) {
             passed,
             data.samples.len()
         );
-        std::process::exit(1);
+        Ok(Outcome::Failed)
     }
 }
 
@@ -130,7 +113,7 @@ async fn compile(
     compiler_template: &str,
     compiler_flags: &[String],
     vars: &HashMap<&str, &str>,
-) -> Result<(), ()> {
+) -> Result<(), AppError> {
     let spinner = Spinner::new("Compiling source...");
 
     let compiler_command = expand_template(compiler_template, vars);
@@ -139,23 +122,25 @@ async fn compile(
         .map(|f| expand_template(f, vars))
         .collect();
 
-    if let Err(e) = compiler::compile(&compiler_command, &compiler_flags).await {
-        spinner.finish(
-            &format!("{}", styles::error(ERROR_PREFIX)),
-            &format!("Compile failed ({}): ", styles::error("CE")),
-        );
-        eprintln!("{}", e);
-        return Err(());
+    match compiler::compile(&compiler_command, &compiler_flags).await {
+        Ok(()) => {
+            spinner.finish(
+                &format!("{}", styles::success(SUCCESS_PREFIX)),
+                "Compile finished.",
+            );
+            Ok(())
+        }
+        Err(e) => {
+            spinner.finish(
+                &format!("{}", styles::error(ERROR_PREFIX)),
+                &format!("Compile failed ({}): ", styles::error("CE")),
+            );
+            Err(e.into())
+        }
     }
-
-    spinner.finish(
-        &format!("{}", styles::success(SUCCESS_PREFIX)),
-        "Compile finished.",
-    );
-    Ok(())
 }
 
-async fn fetch_task_data(url: &str, cookie: Option<String>) -> Option<TaskData> {
+async fn fetch_task_data(url: &str, cookie: Option<String>) -> Result<TaskData, AppError> {
     let client = AtCoderClient::new(cookie);
     let spinner = Spinner::new("Fetching samples...");
 
@@ -165,22 +150,25 @@ async fn fetch_task_data(url: &str, cookie: Option<String>) -> Option<TaskData> 
                 &format!("{}", styles::success("200 OK")),
                 &format!("{} sample(s) fetched.", val.samples.len()),
             );
-            Some(val)
+            Ok(val)
         }
         Err(e) => {
             let code = e
-                .status()
+                .as_http()
+                .and_then(|http| http.status())
                 .map_or_else(|| String::from(ERROR_PREFIX), |s| s.to_string());
             spinner.finish(
                 &format!("{}", styles::error(&code)),
                 "Failed to fetch samples:",
             );
-            eprintln!("{}", e);
-            None
+            Err(e.into())
         }
     }
 }
 
+/// Runs one sample and prints its verdict. Returns `Ok(true)` on AC.
+///
+/// `Err` is reserved for system failures that abort the whole run.
 async fn execute_test_case(
     case_num: usize,
     run_command: &str,
@@ -188,7 +176,7 @@ async fn execute_test_case(
     sample: &SampleInput,
     gnu_time: Option<&str>,
     time_limit_secs: u32,
-) -> bool {
+) -> Result<bool, AppError> {
     info_ln!("Sample #{}", case_num);
     let mut is_ac = false;
 
@@ -228,14 +216,14 @@ async fn execute_test_case(
                 println!("{}:\n  {}", styles::dim("Log"), stderr);
             }
         }
-        Err(RunError::StartFailed(e)) => {
+        Err(RunError::StartFailed(source)) => {
             error_ln!("System Error (Could not run the binary)");
-            println!("{}:\n  {}", styles::dim("Details"), e);
+            return Err(source.into());
         }
     }
 
     println!();
-    is_ac
+    Ok(is_ac)
 }
 
 fn expand_template(template: &str, vars: &HashMap<&str, &str>) -> String {
@@ -262,13 +250,13 @@ fn expand_template(template: &str, vars: &HashMap<&str, &str>) -> String {
     result
 }
 
-fn load_config() -> Result<Option<Config>, ConfigError> {
+fn load_config() -> Result<Option<Config>, AppError> {
     match config::utils::load_local_config() {
         Ok(result) => Ok(result),
         Err(e) => {
             warn_ln!("{}", e);
             warn_ln!("Continuing with global settings...");
-            config::utils::load_global_config()
+            Ok(config::utils::load_global_config()?)
         }
     }
 }

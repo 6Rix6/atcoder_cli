@@ -4,9 +4,10 @@ use clap::Args;
 use dialoguer::{Confirm, FuzzySelect};
 
 use crate::{
-    cli::styles::{self, dialog_theme::DialogTheme},
-    config::{self, models::Config},
+    cli::{Outcome, styles::dialog_theme::DialogTheme},
+    config::{self, error::ConfigError, models::Config},
     constants::{CONFIG_DIR_NAME, CONFIG_FILE_NAME},
+    error::AppError,
     languages::LANGUAGES,
 };
 
@@ -16,19 +17,13 @@ pub struct InitArgs {
     pub directory: Option<String>,
 }
 
-pub async fn init(args: &InitArgs) {
-    let dir = args
-        .directory
-        .as_ref()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            dirs::config_dir()
-                .unwrap_or_else(|| {
-                    error_ln!("Could not determine config directory.");
-                    std::process::exit(1);
-                })
-                .join(CONFIG_DIR_NAME)
-        });
+pub async fn init(args: &InitArgs) -> Result<Outcome, AppError> {
+    let dir = match args.directory.as_ref() {
+        Some(directory) => PathBuf::from(directory),
+        None => dirs::config_dir()
+            .map(|dir| dir.join(CONFIG_DIR_NAME))
+            .ok_or(ConfigError::NoConfigDir)?,
+    };
     let path = dir.join(CONFIG_FILE_NAME);
 
     let names: Vec<&str> = LANGUAGES.iter().map(|l| l.name).collect();
@@ -37,15 +32,11 @@ pub async fn init(args: &InitArgs) {
         .with_prompt("Choose your favorite programming language")
         .default(0)
         .items(&names)
-        .interact_opt()
-        .unwrap_or_else(|e| {
-            error_ln!("An error occurred: {}", e);
-            std::process::exit(1);
-        });
+        .interact_opt()?;
 
     let Some(index) = selection else {
         println!("Canceled.");
-        return;
+        return Ok(Outcome::Success);
     };
 
     if path.exists() {
@@ -54,25 +45,19 @@ pub async fn init(args: &InitArgs) {
         let proceed = Confirm::with_theme(&DialogTheme::default())
             .with_prompt("Do you want to overwrite it?")
             .default(false)
-            .interact()
-            .unwrap_or(false);
+            .interact()?;
 
         if !proceed {
             println!("Canceled.");
-            return;
+            return Ok(Outcome::Success);
         }
     }
 
     let lang = &LANGUAGES[index];
     let config = Config::from(&lang.config);
 
-    match config::utils::create_config(config, &dir) {
-        Ok(path) => {
-            success_ln!("Config created at: {}", path.display());
-        }
-        Err(e) => {
-            error_ln!("Failed to create config file.");
-            eprintln!("{}:\n  {}", styles::dim("Details"), e);
-        }
-    }
+    let created = config::utils::create_config(config, &dir)?;
+
+    success_ln!("Config created at: {}", created.display());
+    Ok(Outcome::Success)
 }

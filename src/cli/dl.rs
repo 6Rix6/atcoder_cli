@@ -2,7 +2,8 @@ use clap::Args;
 
 use crate::{
     atcoder::{self, client::AtCoderClient},
-    cli::utils,
+    cli::{Outcome, utils},
+    error::AppError,
 };
 
 #[derive(Debug, Args)]
@@ -10,28 +11,17 @@ pub struct DlArgs {
     pub task_id: String,
 }
 
-pub async fn download(args: &DlArgs) {
+pub async fn download(args: &DlArgs) -> Result<Outcome, AppError> {
     let Some(task_info) = atcoder::utils::get_task_info(&args.task_id) else {
-        error_ln!("Invalid task URL or ID.");
-        std::process::exit(1);
+        return Err(AppError::InvalidTask(args.task_id.clone()));
     };
 
-    let cookie = utils::get_revel_session();
+    let cookie = utils::session_cookie()?;
 
     let client = AtCoderClient::new(cookie);
-    let page = client.get_page(&task_info.url).await;
+    let page = client.get_page(&task_info.url).await?;
 
-    match page {
-        Ok(Some(val)) => {
-            println!("{}", val.problem_md);
-        }
-        Ok(None) => {
-            failed_ln!("Failed to parse page.");
-            std::process::exit(1);
-        }
-        Err(e) => {
-            error_ln!("{}", e);
-            std::process::exit(1);
-        }
-    }
+    println!("{}", page.problem_md);
+
+    Ok(Outcome::Success)
 }

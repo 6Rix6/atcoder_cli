@@ -8,9 +8,6 @@ use tokio::time::timeout;
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
 
-/// Fallback time limit (seconds) used when the problem page does not declare one.
-pub const DEFAULT_TIME_LIMIT_SECS: u32 = 3;
-
 /// Holds the result of a single test case execution.
 pub struct RunResult {
     pub output: String,

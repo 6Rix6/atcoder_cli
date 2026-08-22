@@ -16,7 +16,7 @@ pub struct TaskPage {
 
 #[derive(Debug, Clone)]
 pub struct TaskData {
-    pub page: Option<TaskPage>,
+    pub page: TaskPage,
     pub samples: Vec<SampleInput>,
 }
 

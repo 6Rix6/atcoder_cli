@@ -1,23 +1,23 @@
+use std::process::ExitCode;
+
 use clap::Parser;
 
-use atcoder_cli::cli::{self, Cli, Commands};
+use atcoder_cli::cli::{self, Cli, Outcome};
 
 #[tokio::main]
-async fn main() {
+async fn main() -> ExitCode {
     let cli = Cli::parse();
 
-    match &cli.command {
-        Commands::Test(args) => {
-            cli::test::run(args).await;
+    let outcome = match cli::run(&cli).await {
+        Ok(outcome) => outcome,
+        Err(err) => {
+            cli::report_error(&err);
+            return ExitCode::FAILURE;
         }
-        Commands::Auth(args) => {
-            cli::auth::handle(args).await;
-        }
-        Commands::Init(args) => {
-            cli::init::init(args).await;
-        }
-        Commands::Download(args) => {
-            cli::dl::download(args).await;
-        }
+    };
+
+    match outcome {
+        Outcome::Success => ExitCode::SUCCESS,
+        Outcome::Failed => ExitCode::from(2),
     }
 }

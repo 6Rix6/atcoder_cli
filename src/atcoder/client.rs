@@ -4,6 +4,7 @@ use reqwest::{Client, Response, redirect::Policy};
 
 use crate::{
     atcoder::{
+        error::AtcoderError,
         models::{TaskData, TaskPage},
         parser::Parser,
     },
@@ -24,13 +25,13 @@ impl AtCoderClient {
             .redirect(Policy::none())
             .timeout(Duration::from_secs(ATCODER_HTTP_TIMEOUT_SECS))
             .build()
-            .unwrap_or_default();
+            .expect("failed to build HTTP client");
 
         Self { client, cookie }
     }
 
     /// Fetch a page from AtCoder using the inner client and cookie.
-    pub async fn fetch_page(&self, url: &str) -> Result<Response, reqwest::Error> {
+    pub async fn fetch_page(&self, url: &str) -> Result<Response, AtcoderError> {
         let mut request = self.client.get(url);
 
         if let Some(ref cookie_value) = self.cookie {
@@ -40,33 +41,39 @@ impl AtCoderClient {
             }
         }
 
-        request.send().await
+        request.send().await.map_err(AtcoderError::from)
     }
 
     /// Fetch HTML content from the given URL.
-    pub async fn fetch_html(&self, url: &str) -> Result<String, reqwest::Error> {
+    pub async fn fetch_html(&self, url: &str) -> Result<String, AtcoderError> {
         let response = self.fetch_page(url).await?;
         let response = response.error_for_status()?;
 
-        response.text().await
+        response.text().await.map_err(AtcoderError::from)
     }
 
     /// Fetch a problem page and extract both its metadata and sample cases.
-    pub async fn get_task(&self, url: &str) -> Result<TaskData, reqwest::Error> {
+    pub async fn get_task(&self, url: &str) -> Result<TaskData, AtcoderError> {
         let html = self.fetch_html(url).await?;
         let parser = Parser::new(&html);
+        let page = parser.page().ok_or_else(|| AtcoderError::Parse {
+            url: url.to_string(),
+        })?;
 
         Ok(TaskData {
-            page: parser.page(),
+            page,
             samples: parser.samples(),
         })
     }
 
-    pub async fn get_page(&self, url: &str) -> Result<Option<TaskPage>, reqwest::Error> {
+    /// Fetch a problem page and extract its metadata.
+    pub async fn get_page(&self, url: &str) -> Result<TaskPage, AtcoderError> {
         let html = self.fetch_html(url).await?;
-        let parser = Parser::new(&html);
-        let page = parser.page();
 
-        Ok(page)
+        Parser::new(&html)
+            .page()
+            .ok_or_else(|| AtcoderError::Parse {
+                url: url.to_string(),
+            })
     }
 }

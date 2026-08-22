@@ -1,13 +1,12 @@
 use std::path::PathBuf;
 
 use crate::constants::{CONFIG_DIR_NAME, COOKIE_FILE_NAME};
+use crate::cookie::error::CookieError;
 
-pub fn get_cookie_path() -> PathBuf {
-    let mut config_path = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
-    config_path.push(CONFIG_DIR_NAME);
-    config_path.push(COOKIE_FILE_NAME);
+pub fn get_cookie_path() -> Result<PathBuf, CookieError> {
+    let config_dir = dirs::config_dir().ok_or(CookieError::NoConfigDir)?;
 
-    config_path
+    Ok(config_dir.join(CONFIG_DIR_NAME).join(COOKIE_FILE_NAME))
 }
 
 /// RFC 6265 cookie-octets: rejects empty values, whitespace, controls,
