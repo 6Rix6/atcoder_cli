@@ -139,11 +139,13 @@ pub async fn handle(args: &AuthArgs) {
                             &format!("{}", styles::error(&status.to_string())),
                             "Session expired. Please log in again.",
                         );
+                        std::process::exit(1);
                     } else {
                         spinner.finish(
                             &format!("{}", styles::error(&status.to_string())),
                             "Received unexpected status code. Try again.",
                         );
+                        std::process::exit(1);
                     }
                 }
                 Err(e) => {
@@ -155,6 +157,7 @@ pub async fn handle(args: &AuthArgs) {
                         "A network error occurred:",
                     );
                     eprintln!("{}", e);
+                    std::process::exit(1);
                 }
             }
         }

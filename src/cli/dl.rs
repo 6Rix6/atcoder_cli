@@ -27,9 +27,11 @@ pub async fn download(args: &DlArgs) {
         }
         Ok(None) => {
             failed_ln!("Failed to parse page.");
+            std::process::exit(1);
         }
         Err(e) => {
             error_ln!("{}", e);
+            std::process::exit(1);
         }
     }
 }
