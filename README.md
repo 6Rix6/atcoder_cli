@@ -9,13 +9,17 @@ atcoderにログイン。実際にはatcoderに誘導しクッキーをコピペ
 - acc auth logout
 クッキーファイルを削除
 
-- acc auth statuc
+- acc auth status
 クッキーが有効かどうか検証
 
 ### acc test
 - acc test <task_id>
 指定されたタスクのテストケースを実行。atcoder.tomlまたは引数でコンパイル・実行コマンドを指定
 
-### acc set
-- acc test <contest_id>
-そのセッション内でコンテストを設定。設定するとtask_idが問題番号の指定だけでよくなる
+### acc init
+- acc init
+対話形式で使用言語を選択し、atcoder.tomlを生成
+
+### acc download (dl)
+- acc download <task_id>
+問題文をMarkdownで標準出力に取得
