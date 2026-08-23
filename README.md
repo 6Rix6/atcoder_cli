@@ -6,9 +6,22 @@ AtCoder向けのCLIヘルパー。問題文の取得、サンプルケースの�
 
 ## インストール
 
+### ビルド済みバイナリを使う場合
+
+[Releases](https://github.com/6Rix6/atcoder_cli/releases) からバイナリをダウンロードし、パスの通った場所に配置してください。
+
+```sh
+tar xzf acc-v*-x86_64-linux.tar.gz
+sudo mv acc /usr/local/bin/
+```
+
+### 自分でビルドする場合
+
 Rust 1.85以上(edition 2024)が必要です。
 
 ```sh
+git clone https://github.com/6Rix6/atcoder_cli
+cd atcoder_cli
 cargo build --release
 # バイナリ: target/release/acc
 ```

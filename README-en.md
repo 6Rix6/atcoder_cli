@@ -6,9 +6,22 @@ A CLI helper for AtCoder: download problem statements, run sample test cases, an
 
 ## Installation
 
+### Using a pre-built binary
+
+Download a binary from [Releases](https://github.com/6Rix6/atcoder_cli/releases) and place it somewhere in your `PATH`.
+
+```sh
+tar xzf acc-v*-x86_64-linux.tar.gz
+sudo mv acc /usr/local/bin/
+```
+
+### Building from source
+
 Requires Rust 1.85+ (edition 2024).
 
 ```sh
+git clone https://github.com/6Rix6/atcoder_cli
+cd atcoder_cli
 cargo build --release
 # Binary: target/release/acc
 ```
