@@ -2,7 +2,7 @@ use std::io::IsTerminal;
 
 use clap::{Parser, Subcommand};
 
-use crate::cli::{auth::AuthArgs, dl::DlArgs, init::InitArgs, test::TestArgs};
+use crate::cli::{auth::AuthArgs, dl::DlArgs, init::InitArgs, setup::SetupArgs, test::TestArgs};
 use crate::error::AppError;
 
 #[macro_use]
@@ -13,6 +13,8 @@ mod utils;
 pub mod auth;
 pub mod dl;
 pub mod init;
+pub mod setup;
+pub mod template;
 pub mod test;
 
 /// The result of a command that completes normally.
@@ -46,6 +48,10 @@ pub enum Commands {
     /// Create an atcoder.toml config file interactively.
     Init(InitArgs),
 
+    /// Create a contest directory with one subdirectory per problem.
+    #[clap(visible_alias = "s")]
+    Setup(SetupArgs),
+
     /// Download a problem statement as Markdown (stdout by default, or a file with -o).
     #[clap(visible_alias = "dl")]
     Download(DlArgs),
@@ -59,6 +65,7 @@ pub fn run(cli: &Cli) -> Result<Outcome, AppError> {
         Commands::Test(args) => test::run(args),
         Commands::Auth(args) => auth::handle(args),
         Commands::Init(args) => init::init(args),
+        Commands::Setup(args) => setup::run(args),
         Commands::Download(args) => dl::download(args),
     }
 }

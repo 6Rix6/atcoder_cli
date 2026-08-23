@@ -29,6 +29,12 @@ pub enum AppError {
     #[error("invalid task URL or ID: '{0}'")]
     InvalidTask(String),
 
+    #[error("invalid contest URL or ID: '{0}'")]
+    InvalidContest(String),
+
+    #[error("setup path '{0}' escapes the contest directory")]
+    InvalidSetupPath(String),
+
     #[error("no config file found")]
     NoConfig,
 

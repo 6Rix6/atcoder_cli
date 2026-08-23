@@ -1,4 +1,5 @@
 use crate::{
+    config::{self},
     constants::REVEL_SESSION,
     cookie::{self, CookieError, storage::CookieStorage},
     error::AppError,
@@ -43,5 +44,22 @@ pub fn session_cookie() -> Result<Option<String>, AppError> {
             Ok(None)
         }
         SessionStatus::Unreadable(e) => Err(e.into()),
+    }
+}
+
+/// Loads the atcoder.toml config with local-first, global-fallback semantics.
+///
+/// A missing local file silently falls back to the global one, while a broken
+/// local file warns before falling back. Returns `Ok(None)` when neither
+/// exists.
+pub fn load_config() -> Result<Option<config::models::Config>, AppError> {
+    match config::utils::load_local_config() {
+        Ok(Some(config)) => Ok(Some(config)),
+        Ok(None) => Ok(config::utils::load_global_config()?),
+        Err(e) => {
+            warn_ln!("{}", e);
+            warn_ln!("Continuing with global settings...");
+            Ok(config::utils::load_global_config()?)
+        }
     }
 }

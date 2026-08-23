@@ -22,9 +22,11 @@ cargo build --release
 | `acc auth logout` | | Delete the cookie file |
 | `acc auth status` | | Check whether the saved cookie is still valid |
 | `acc init` | | Create an `atcoder.toml` config file interactively |
+| `acc setup <CONTEST_ID>` | `s` | Create a contest directory with one subdirectory per problem |
 | `acc download <TASK_ID>` | `dl` | Fetch a problem statement as Markdown to stdout (`-o` to save to a file) |
 
 `<TASK_ID>` accepts a task ID such as `abc350_a`, or the full problem page URL.
+`<CONTEST_ID>` accepts a contest ID such as `abc350`, or the full contest URL.
 
 ## Typical workflow
 
@@ -33,12 +35,15 @@ cargo build --release
 acc init
 acc auth login   # follow the instructions and paste REVEL_SESSION
 
-# 2. Download the problem statement
+# 2. Create the contest directory (a/ b/ ... generated per problem)
+acc setup abc350
+
+# 3. Download the problem statement
 acc dl abc350_a > problem.md
 # or save directly with -o
 acc dl abc350_a -o problem.md
 
-# 3. Write your solution and run the samples
+# 4. Write your solution and run the samples (from the directory holding atcoder.toml)
 acc t abc350_a
 ```
 
@@ -60,6 +65,50 @@ The following template variables are available in commands and flags:
 | `${CONTEST_ID}` | Contest ID | `abc350` |
 | `${TASK_ID}` | Task ID | `abc350_a` |
 | `${TASK_CHAR}` | Problem letter | `a` |
+
+## Contest directory setup (acc setup)
+
+`acc setup <CONTEST_ID>` fetches the task list and generates a source template for every problem. It does **not** copy `atcoder.toml`: the intended style is to stay in the directory holding your config (the working root) and reference generated paths through template variables:
+
+```toml
+compiler = "g++"
+compiler_flags = ["${CONTEST_ID}/${TASK_CHAR}/main.cpp", "-O2", "-o", "${TASK_ID}"]
+run = "./${TASK_ID}"
+
+[setup]
+parent = "~/atcoder/contests"           # parent of the contest directory (default: current dir)
+dir = "${TASK_CHAR}"
+file = ["main.cpp"]
+```
+
+```sh
+acc setup abc350          # created under [setup].parent, or the current directory
+acc setup abc350 -d ~/cp  # override the output location for one run (-d wins over [setup].parent)
+acc setup abc473 --md     # also download problem statements as Markdown
+```
+
+- Before a contest starts, the task-list page does not exist yet; the problem letters are then taken from the point-value table on the contest top page (`--md` cannot fetch anything in that state).
+- **Existing files are never overwritten.** Re-running only creates what is missing.
+
+The directory layout can be customized with a `[setup]` table:
+
+```toml
+[setup]
+dir = "${TASK_CHAR}"                    # per-problem path (relative to the contest root)
+file = ["main.cpp"]                     # files to create (relative to the problem dir, multiple allowed)
+
+[setup.template]                        # inline templates keyed by extension (optional)
+cpp = '''
+#include <bits/stdc++.h>
+using namespace std;
+
+int main() {
+
+}
+'''
+```
+
+`dir` / `file` support the template variables (`${CONTEST_ID}` / `${TASK_ID}` / `${TASK_CHAR}`). A leading `~` in `parent` expands to the home directory. Template bodies are resolved in this order: `[setup.template]` by extension → builtin preset template for standard names (`main.cpp`, ...) → empty file.
 
 ## Test behavior
 

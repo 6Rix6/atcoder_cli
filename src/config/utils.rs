@@ -37,7 +37,7 @@ fn load_config(path: &Path) -> Result<Option<Config>, ConfigError> {
     }
 }
 
-pub fn create_config(config: Config, directory: &PathBuf) -> Result<PathBuf, ConfigError> {
+pub fn create_config(config: &Config, directory: &PathBuf) -> Result<PathBuf, ConfigError> {
     std::fs::create_dir_all(directory).map_err(|e| ConfigError::Write {
         path: directory.clone(),
         source: e,

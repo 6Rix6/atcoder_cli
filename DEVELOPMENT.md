@@ -31,7 +31,9 @@ main.rs ──> cli ──> atcoder / config / cookie / process / utils
 │   │   ├── test.rs        # acc test(コンパイル→サンプル実行→判定)
 │   │   ├── dl.rs          # acc download(問題文Markdown取得)
 │   │   ├── init.rs        # acc init(対話で設定生成)
-│   │   ├── utils/mod.rs   # セッションcookie読み出し(SessionStatus)
+│   │   ├── setup.rs       # acc setup(コンテスト用ディレクトリ一括生成。非破壊・冪等)
+│   │   ├── template.rs    # ${VAR}展開の共通実装(BTreeMapで決定的)
+│   │   ├── utils/mod.rs   # セッションcookie読み出し(SessionStatus)、configロード
 │   │   └── styles/
 │   │       ├── macros.rs         # print系マクロ(success_ln!/error_ln!/...)
 │   │       ├── spinner.rs        # indicatifラッパ(静的テンプレートのみ)
@@ -90,6 +92,16 @@ tokioは使用せず完全同期。ワークロードが逐次的(fetch→compil
 - プロセス実行: `std::process` + watchdog スレッド(unix では `setsid` + `killpg` でプロセスグループごと kill)
 - 対話プロンプト(dialoguer)は TTY 前提のため、呼び出し前に `cli::ensure_interactive()` で非対話環境を検出して中断する(非TTYでは dialoguer が無限再描画するため)
 
+### acc setup の設計
+
+- **問題一覧は2段フォールバック**: まず `/contests/{id}/tasks` をパース。4xx等や0件なら(開催前コンテストを想定)トップページ `/contests/{id}` の「配点 / Point Values」表から問題文字を抽出し `{contest_id}_{letter}` から `TaskInfo` を組立。両方失敗で `AtcoderError::NoTasksFound`
+- **atcoder.toml はコピーしない**: 作業ルートの1枚の設定をテンプレート変数(`${CONTEST_ID}/${TASK_CHAR}` 等)で生成パスへ向ける運用を想定。設定が無い場合のみ対話選択(FuzzySelect)へフォールバックし、その結果はメモリ上だけで使う(`acc init` を案内)
+- **ディレクトリ構成は `[setup]` テーブルでカスタマイズ**(`Config.setup: Option<SetupConfig>`): `parent`(コンテストディレクトリの親。先頭`~`展開)・`dir`(問題ディレクトリのパスパターン)・`file`(生成ファイル)・`template`(拡張子キーのインライン雛形)。省略時はプリセット一致言語の標準配置(`a/main.cpp` 等)。出力先の優先度は `--directory` フラグ > `[setup].parent` > カレント
+- 雛形の解決順: `[setup.template][拡張子]` → プリセット雛形(全言語から同一相対パス検索。カスタムconfigでも標準名なら雛形が入る) → 空ファイル
+- 展開は `cli/template.rs` の `expand_template` を共有(BTreeMap反復で決定的)。`${CONTEST_ID}/${TASK_ID}/${TASK_CHAR}`
+- **非破壊・冪等**: 既存ファイル・ディレクトリは絶対に上書きしない(warnしてskip)。`..` や絶対パスによるコンテストルート外への脱出は `AppError::InvalidSetupPath`
+- `--md` は問題ごとに失敗をwarnして継続し、全件失敗時のみ `Outcome::Failed`(exit code 2)
+
 ### Lint 方針
 
 lib層モジュール(atcoder/config/cookie/process/utils)には冒頭で以下を適用:
@@ -121,7 +133,6 @@ cargo fmt --check    # フォーマット確認(rustfmt, edition 2024)
 
 ## 既知の制限・TODO
 
-- `expand_template`(src/cli/test.rs)は HashMap 反復順序依存の置換。値に `${...}` を含めると非決定的になりうる
 - `dialog_theme.rs` は dialoguer `ColorfulTheme` の改造コピー(約450行)。prefix描画ブロックが8箇所重複
 - メモリ制限は計測表示のみで強制しない
 - Windows は TLE 時のプロセスキル(killpg)未対応

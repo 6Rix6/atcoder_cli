@@ -58,9 +58,10 @@ pub fn init(args: &InitArgs) -> Result<Outcome, AppError> {
     }
 
     let lang = &LANGUAGES[index];
-    let config = Config::from(&lang.config);
+    let mut config = Config::from(&lang.config);
+    config.setup = Some(lang.default_setup());
 
-    let created = config::utils::create_config(config, &dir)?;
+    let created = config::utils::create_config(&config, &dir)?;
 
     success_ln!("Config created at: {}", created.display());
     Ok(Outcome::Success)

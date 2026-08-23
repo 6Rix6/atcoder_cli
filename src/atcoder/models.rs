@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
 pub struct SampleInput {
@@ -30,8 +30,8 @@ pub struct TaskInfo {
 }
 
 impl TaskInfo {
-    pub fn to_map(&self) -> HashMap<&'static str, &str> {
-        let mut map: HashMap<&'static str, &str> = HashMap::new();
+    pub fn to_map(&self) -> BTreeMap<&'static str, &str> {
+        let mut map: BTreeMap<&'static str, &str> = BTreeMap::new();
         map.insert("CONTEST_ID", &self.contest_id);
         map.insert("TASK_ID", &self.task_id);
         map.insert("TASK_CHAR", &self.task_char);

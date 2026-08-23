@@ -22,9 +22,11 @@ cargo build --release
 | `acc auth logout` | | クッキーファイルを削除 |
 | `acc auth status` | | 保存済みクッキーの有効性を検証 |
 | `acc init` | | 対話形式で言語を選び `atcoder.toml` を生成 |
+| `acc setup <CONTEST_ID>` | `s` | コンテスト用ディレクトリを自動生成(問題ごとの雛形込み) |
 | `acc download <TASK_ID>` | `dl` | 問題文をMarkdownとして標準出力へ取得(`-o` でファイル保存) |
 
 `<TASK_ID>` には `abc350_a` のようなタスクIDか、問題ページURL全体を指定できます。
+`<CONTEST_ID>` には `abc350` のようなコンテストIDか、コンテストURL全体を指定できます。
 
 ## 使い方の流れ
 
@@ -33,12 +35,15 @@ cargo build --release
 acc init
 acc auth login   # 表示手順に従い REVEL_SESSION を貼り付け
 
-# 2. 問題文の取得
+# 2. コンテスト用ディレクトリの作成(問題ごとに a/ b/ ... を一括生成)
+acc setup abc350
+
+# 3. 問題文の取得
 acc dl abc350_a > problem.md
 # または -o で直接保存
 acc dl abc350_a -o problem.md
 
-# 3. 解答を作成しサンプルテスト
+# 4. 解答を作成しサンプルテスト(atcoder.tomlのある場所から実行)
 acc t abc350_a
 ```
 
@@ -60,6 +65,49 @@ run_flags = []                         # 省略可
 | `${CONTEST_ID}` | コンテストID | `abc350` |
 | `${TASK_ID}` | タスクID | `abc350_a` |
 | `${TASK_CHAR}` | 問題文字 | `a` |
+
+## コンテストディレクトリのセットアップ(acc setup)
+
+`acc setup <CONTEST_ID>` は問題一覧を取得し、各問題のソースファイル雛形を生成します。`atcoder.toml` のコピーは行わないため、`atcoder.toml` を置いたディレクトリ(作業ルート)から移動せずに使う想定です。生成パスをテンプレート変数で参照する設定例:
+
+```toml
+compiler = "g++"
+compiler_flags = ["${CONTEST_ID}/${TASK_CHAR}/main.cpp", "-O2", "-o", "${TASK_ID}"]
+run = "./${TASK_ID}"
+
+[setup]
+dir = "${TASK_CHAR}"
+file = ["main.cpp"]
+```
+
+```sh
+acc setup abc350          # カレントディレクトリ直下に作成
+acc setup abc350 -d ~/cp  # 出力先を指定
+acc setup abc473 --md     # 問題文Markdownも同時取得
+```
+
+- 開催前のコンテストではタスク一覧ページが存在しないため、トップページの配点表から問題文字を取得します(この場合 `--md` は取得できません)
+- **既存ファイルは上書きしません**。再実行すると未作成の問題だけ追加されます
+
+ディレクトリ構成は `[setup]` テーブルでカスタマイズできます。
+
+```toml
+[setup]
+dir = "${TASK_CHAR}"                    # 各問題ディレクトリのパス(コンテストルート相対)
+file = ["main.cpp"]                     # 生成するファイル(問題ディレクトリ相対・複数可)
+
+[setup.template]                        # 雛形を拡張子キーで直接指定(省略可)
+cpp = '''
+#include <bits/stdc++.h>
+using namespace std;
+
+int main() {
+
+}
+'''
+```
+
+`dir` / `file` にはテンプレート変数(`${CONTEST_ID}` / `${TASK_ID}` / `${TASK_CHAR}`)が使えます。`parent` は先頭の `~` をホームディレクトリに展開します。雛形は `[setup.template]` の拡張子キー → 標準ファイル名のプリセット雛形(`main.cpp` 等) → 空ファイル の順で決まります。
 
 ## テスト実行の挙動
 

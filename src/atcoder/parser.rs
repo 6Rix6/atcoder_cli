@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -12,6 +13,9 @@ const SAMPLE_INPUT_KEY_JA: &str = "入力例";
 const SAMPLE_OUTPUT_KEY_JA: &str = "出力例";
 const SAMPLE_INPUT_KEY_EN: &str = "Sample Input";
 const SAMPLE_OUTPUT_KEY_EN: &str = "Sample Output";
+
+const POINT_HEADING_JA: &str = "配点";
+const POINT_HEADING_EN: &str = "Point Value";
 
 static PART_SELECTOR: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse(".part").expect("static selector must be valid"));
@@ -33,6 +37,16 @@ static LIMITS_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     )
     .expect("static regex must be valid")
 });
+static TASK_LINK_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("a[href]").expect("static selector must be valid"));
+static STATEMENT_CONTAINER_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("#contest-statement").expect("static selector must be valid"));
+static TABLE_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("table").expect("static selector must be valid"));
+static ROW_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("tbody tr").expect("static selector must be valid"));
+static CELL_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("td").expect("static selector must be valid"));
 
 pub struct Parser {
     document: Html,
@@ -123,6 +137,99 @@ impl Parser {
             memory_limit: mem,
             problem_md: md,
         })
+    }
+
+    /// Extract task screen names linked from a contest task-list page
+    /// (`/contests/{id}/tasks`).
+    ///
+    /// Each task is linked twice (index cell and title cell); duplicates are
+    /// removed while preserving first-seen order.
+    pub fn task_screen_names(&self, contest_id: &str) -> Vec<String> {
+        let prefix = format!("/contests/{}/tasks/", contest_id);
+
+        let mut seen = HashSet::new();
+        let mut names = Vec::new();
+
+        for anchor in self.document.select(&TASK_LINK_SELECTOR) {
+            let href = anchor.value().attr("href").unwrap_or_default();
+            if !href.starts_with(&prefix) {
+                continue;
+            }
+
+            let name = href.rsplit('/').next().unwrap_or_default();
+            if name.is_empty() || !seen.insert(name.to_string()) {
+                continue;
+            }
+            names.push(name.to_string());
+        }
+
+        names
+    }
+
+    /// Extract problem characters ("a", "b", ...) from the point-value table
+    /// of a contest top page, which is the only source available before a
+    /// contest starts (`配点` / `Point Values` headings).
+    pub fn contest_top_task_chars(&self) -> Vec<String> {
+        let Some(container) = self.document.select(&STATEMENT_CONTAINER_SELECTOR).next() else {
+            return vec![];
+        };
+
+        for heading in container.select(&H3_SELECTOR) {
+            let text = heading.text().collect::<String>();
+            let trimmed = text.trim();
+            if !(trimmed.starts_with(POINT_HEADING_JA) || trimmed.starts_with(POINT_HEADING_EN)) {
+                continue;
+            }
+
+            let chars = Self::task_chars_from_point_table(&heading);
+            if !chars.is_empty() {
+                return chars;
+            }
+        }
+
+        vec![]
+    }
+
+    /// Collects the problem letters from the first table following `heading`.
+    fn task_chars_from_point_table(heading: &ElementRef<'_>) -> Vec<String> {
+        let Some(table) = Self::first_table_after(heading) else {
+            return vec![];
+        };
+
+        let mut seen = HashSet::new();
+        let mut chars = Vec::new();
+
+        for row in table.select(&ROW_SELECTOR) {
+            let Some(cell) = row.select(&CELL_SELECTOR).next() else {
+                continue;
+            };
+
+            let letter = cell.text().collect::<String>().trim().to_lowercase();
+            if !letter.is_empty() && seen.insert(letter.clone()) {
+                chars.push(letter);
+            }
+        }
+
+        chars
+    }
+
+    /// Walks forward from `start` among its siblings and returns the first
+    /// table element (searching descendants as well).
+    fn first_table_after<'a>(start: &ElementRef<'a>) -> Option<ElementRef<'a>> {
+        let mut node = start.next_sibling();
+        while let Some(current) = node {
+            if let Some(element) = ElementRef::wrap(current) {
+                if element.value().name() == "table" {
+                    return Some(element);
+                }
+                if let Some(table) = element.select(&TABLE_SELECTOR).next() {
+                    return Some(table);
+                }
+            }
+            node = current.next_sibling();
+        }
+
+        None
     }
 
     fn get_task_statement(&self, lang: TaskLanguage) -> Option<ElementRef<'_>> {
@@ -275,5 +382,118 @@ mod tests {
             Some((1, 2048))
         );
         assert_eq!(Parser::extract_limits("no limits here"), None);
+    }
+
+    const TASKS_PAGE_HTML: &str = r#"
+<html><body>
+<div id="main-container">
+  <table class="table table-bordered table-striped">
+    <thead>
+      <tr><th></th><th>Task Name</th><th>Time Limit</th><th>Memory Limit</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="text-center no-break"><a href="/contests/abc350/tasks/abc350_a">A</a></td>
+        <td><a href="/contests/abc350/tasks/abc350_a">Past ABCs</a></td>
+        <td class="text-right">2 sec</td>
+        <td class="text-right">1024 MiB</td>
+      </tr>
+      <tr>
+        <td class="text-center no-break"><a href="/contests/abc350/tasks/abc350_b">B</a></td>
+        <td><a href="/contests/abc350/tasks/abc350_b">Dentist Aoki</a></td>
+        <td class="text-right">2 sec</td>
+        <td class="text-right">1024 MiB</td>
+      </tr>
+      <tr>
+        <td class="text-center no-break"><a href="/contests/other/tasks/other_x">X</a></td>
+        <td><a href="/contests/other/tasks/other_x">Other contest</a></td>
+        <td class="text-right">2 sec</td>
+        <td class="text-right">1024 MiB</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+</body></html>
+"#;
+
+    #[test]
+    fn extracts_screen_names_from_tasks_page() {
+        let parser = Parser::new(TASKS_PAGE_HTML);
+
+        let names = parser.task_screen_names("abc350");
+        assert_eq!(names, vec!["abc350_a", "abc350_b"]);
+
+        // 別コンテストのリンクは除外される
+        assert_eq!(parser.task_screen_names("other"), vec!["other_x"]);
+        assert!(parser.task_screen_names("nothing").is_empty());
+    }
+
+    const CONTEST_TOP_HTML: &str = r#"
+<html><body>
+<div id="contest-statement"><span class="lang">
+  <span class="lang-ja">
+    <h3>コンテスト情報</h3>
+    <section><ul><li>コンテスト時間: 100 分</li></ul></section>
+    <h3>配点</h3>
+    <section>
+      <div class="row">
+        <div class="span4">
+          <table class="table table-responsible table-striped table-bordered">
+            <thead><tr><th style="text-align:center">問題</th><th style="text-align:center">点数</th></tr></thead>
+            <tbody>
+              <tr><td style="text-align:center">A</td><td style="text-align:center">???</td></tr>
+              <tr><td style="text-align:center">B</td><td style="text-align:center">200</td></tr>
+              <tr><td style="text-align:center">C</td><td style="text-align:center">???</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    <h3>ルール</h3>
+    <section><ol><li>ルール。</li></ol></section>
+  </span>
+  <span class="lang-en">
+    <h3>Point Values</h3>
+    <section>
+      <div class="row">
+        <div class="span4">
+          <table class="table table-responsible table-striped table-bordered">
+            <thead><tr><th>Task</th><th>Score</th></tr></thead>
+            <tbody>
+              <tr><td>A</td><td>???</td></tr>
+              <tr><td>B</td><td>200</td></tr>
+              <tr><td>C</td><td>???</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </span>
+</span></div>
+</body></html>
+"#;
+
+    #[test]
+    fn extracts_task_chars_from_contest_top_page() {
+        let parser = Parser::new(CONTEST_TOP_HTML);
+
+        // ja/en両方に同一の表があるため重複は除去される
+        assert_eq!(parser.contest_top_task_chars(), vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn top_page_chars_are_empty_without_statement_or_table() {
+        let parser = Parser::new("<html><body><p>hello</p></body></html>");
+        assert!(parser.contest_top_task_chars().is_empty());
+
+        let no_table = r#"
+<html><body>
+<div id="contest-statement"><span class="lang">
+  <span class="lang-ja"><h3>配点</h3><p>表なし</p></span>
+</span></div>
+</body></html>
+"#;
+        let parser = Parser::new(no_table);
+        assert!(parser.contest_top_task_chars().is_empty());
     }
 }

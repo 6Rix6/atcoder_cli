@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use clap::Args;
 
@@ -11,9 +11,10 @@ use crate::{
     cli::{
         Outcome,
         styles::{self, ERROR_PREFIX, SUCCESS_PREFIX, spinner::Spinner},
+        template::expand_template,
         utils,
     },
-    config::{self, models::Config},
+    config::models::Config,
     error::AppError,
     process::{
         compiler,
@@ -112,7 +113,7 @@ fn compare_lines_trimmed(s1: &str, s2: &str) -> bool {
 fn compile(
     compiler_template: &str,
     compiler_flags: &[String],
-    vars: &HashMap<&str, &str>,
+    vars: &BTreeMap<&str, &str>,
 ) -> Result<(), AppError> {
     let spinner = Spinner::new("Compiling source...");
 
@@ -224,86 +225,13 @@ fn execute_test_case(
     Ok(is_ac)
 }
 
-fn expand_template(template: &str, vars: &HashMap<&str, &str>) -> String {
-    let mut result = template.to_string();
-    for (key, value) in vars {
-        result = result.replace(&format!("${{{}}}", key), value);
-    }
-
-    let mut rest = result.as_str();
-    while let Some(start) = rest.find("${") {
-        if let Some(end) = rest[start..].find('}') {
-            let var_name = &rest[start + 2..start + end];
-            warn_ln!(
-                "unknown template variable '${{{}}}' in \"{}\"",
-                var_name,
-                template
-            );
-            rest = &rest[start + end + 1..];
-        } else {
-            break;
-        }
-    }
-
-    result
-}
-
 fn load_config() -> Result<Option<Config>, AppError> {
-    match config::utils::load_local_config() {
-        Ok(Some(config)) => Ok(Some(config)),
-        // ローカル設定が存在しない場合もグローバル設定へフォールバックする
-        Ok(None) => Ok(config::utils::load_global_config()?),
-        Err(e) => {
-            warn_ln!("{}", e);
-            warn_ln!("Continuing with global settings...");
-            Ok(config::utils::load_global_config()?)
-        }
-    }
+    utils::load_config()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn vars<'a>(pairs: &[(&'a str, &'a str)]) -> HashMap<&'a str, &'a str> {
-        pairs.iter().copied().collect()
-    }
-
-    #[test]
-    fn replaces_known_variables() {
-        let v = vars(&[("TASK_ID", "abc350_a"), ("CONTEST_ID", "abc350")]);
-
-        assert_eq!(expand_template("${TASK_ID}.cpp", &v), "abc350_a.cpp");
-        assert_eq!(
-            expand_template("g++ ${CONTEST_ID}/${TASK_ID}", &v),
-            "g++ abc350/abc350_a"
-        );
-        // 複数変数・複数回の出現
-        assert_eq!(
-            expand_template("${CONTEST_ID}_${TASK_ID}.log", &v),
-            "abc350_abc350_a.log"
-        );
-    }
-
-    #[test]
-    fn leaves_unknown_variables_untouched() {
-        let v = vars(&[("TASK_ID", "abc350_a")]);
-
-        assert_eq!(
-            expand_template("./build/${UNKNOWN}.out", &v),
-            "./build/${UNKNOWN}.out"
-        );
-    }
-
-    #[test]
-    fn template_without_variables_is_unchanged() {
-        assert_eq!(expand_template("./solution", &vars(&[])), "./solution");
-        // 閉じ括弧が無い場合も壊さない
-        assert_eq!(
-            expand_template("weird ${UNCLOSED", &vars(&[])),
-            "weird ${UNCLOSED"
-        );
-    }
 
     #[test]
     fn compares_lines_ignoring_whitespace() {

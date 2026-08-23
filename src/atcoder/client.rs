@@ -6,10 +6,11 @@ use reqwest::redirect::Policy;
 use crate::{
     atcoder::{
         error::AtcoderError,
-        models::{TaskData, TaskPage},
+        models::{TaskData, TaskInfo, TaskPage},
         parser::Parser,
+        utils::get_task_info,
     },
-    constants::{ATCODER_HTTP_TIMEOUT_SECS, REVEL_SESSION},
+    constants::{ATCODER_BASE_URL, ATCODER_HTTP_TIMEOUT_SECS, REVEL_SESSION},
     cookie::utils::is_valid_session_value,
 };
 
@@ -76,5 +77,42 @@ impl AtCoderClient {
             .ok_or_else(|| AtcoderError::Parse {
                 url: url.to_string(),
             })
+    }
+
+    /// Fetch the task list of a contest.
+    ///
+    /// The task-list page is tried first. Before a contest starts that page is
+    /// unavailable, so this falls back to the point-value table on the contest
+    /// top page.
+    pub fn get_task_list(&self, contest_id: &str) -> Result<Vec<TaskInfo>, AtcoderError> {
+        let tasks_url = format!("{}/contests/{}/tasks", ATCODER_BASE_URL, contest_id);
+
+        if let Ok(html) = self.fetch_html(&tasks_url) {
+            let infos: Vec<TaskInfo> = Parser::new(&html)
+                .task_screen_names(contest_id)
+                .into_iter()
+                .filter_map(|name| get_task_info(&name))
+                .collect();
+
+            if !infos.is_empty() {
+                return Ok(infos);
+            }
+        }
+
+        let top_url = format!("{}/contests/{}", ATCODER_BASE_URL, contest_id);
+        let html = self.fetch_html(&top_url)?;
+
+        let infos: Vec<TaskInfo> = Parser::new(&html)
+            .contest_top_task_chars()
+            .iter()
+            .map(|c| format!("{}_{}", contest_id, c))
+            .filter_map(|id| get_task_info(&id))
+            .collect();
+
+        if infos.is_empty() {
+            return Err(AtcoderError::NoTasksFound { url: tasks_url });
+        }
+
+        Ok(infos)
     }
 }

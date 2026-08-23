@@ -10,6 +10,9 @@ pub enum AtcoderError {
 
     #[error("no sample cases found on the problem page ({url}); the page layout may have changed")]
     NoSamples { url: String },
+
+    #[error("no tasks found ({url}); the contest may not publish its task list yet")]
+    NoTasksFound { url: String },
 }
 
 impl AtcoderError {
