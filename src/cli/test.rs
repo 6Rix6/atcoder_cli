@@ -250,7 +250,9 @@ fn expand_template(template: &str, vars: &HashMap<&str, &str>) -> String {
 
 fn load_config() -> Result<Option<Config>, AppError> {
     match config::utils::load_local_config() {
-        Ok(result) => Ok(result),
+        Ok(Some(config)) => Ok(Some(config)),
+        // ローカル設定が存在しない場合もグローバル設定へフォールバックする
+        Ok(None) => Ok(config::utils::load_global_config()?),
         Err(e) => {
             warn_ln!("{}", e);
             warn_ln!("Continuing with global settings...");
