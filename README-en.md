@@ -22,7 +22,7 @@ cargo build --release
 | `acc auth logout` | | Delete the cookie file |
 | `acc auth status` | | Check whether the saved cookie is still valid |
 | `acc init` | | Create an `atcoder.toml` config file interactively |
-| `acc download <TASK_ID>` | `dl` | Fetch a problem statement as Markdown to stdout |
+| `acc download <TASK_ID>` | `dl` | Fetch a problem statement as Markdown to stdout (`-o` to save to a file) |
 
 `<TASK_ID>` accepts a task ID such as `abc350_a`, or the full problem page URL.
 
@@ -35,6 +35,8 @@ acc auth login   # follow the instructions and paste REVEL_SESSION
 
 # 2. Download the problem statement
 acc dl abc350_a > problem.md
+# or save directly with -o
+acc dl abc350_a -o problem.md
 
 # 3. Write your solution and run the samples
 acc t abc350_a

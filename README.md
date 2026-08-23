@@ -22,7 +22,7 @@ cargo build --release
 | `acc auth logout` | | クッキーファイルを削除 |
 | `acc auth status` | | 保存済みクッキーの有効性を検証 |
 | `acc init` | | 対話形式で言語を選び `atcoder.toml` を生成 |
-| `acc download <TASK_ID>` | `dl` | 問題文をMarkdownとして標準出力へ取得 |
+| `acc download <TASK_ID>` | `dl` | 問題文をMarkdownとして標準出力へ取得(`-o` でファイル保存) |
 
 `<TASK_ID>` には `abc350_a` のようなタスクIDか、問題ページURL全体を指定できます。
 
@@ -35,6 +35,8 @@ acc auth login   # 表示手順に従い REVEL_SESSION を貼り付け
 
 # 2. 問題文の取得
 acc dl abc350_a > problem.md
+# または -o で直接保存
+acc dl abc350_a -o problem.md
 
 # 3. 解答を作成しサンプルテスト
 acc t abc350_a

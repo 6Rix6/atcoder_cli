@@ -46,7 +46,7 @@ pub enum Commands {
     /// Create an atcoder.toml config file interactively.
     Init(InitArgs),
 
-    /// Download a problem statement as Markdown to stdout.
+    /// Download a problem statement as Markdown (stdout by default, or a file with -o).
     #[clap(visible_alias = "dl")]
     Download(DlArgs),
 }
