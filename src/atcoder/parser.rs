@@ -112,8 +112,8 @@ impl Parser {
 
         let md = format!(
             "## {}\n{}\n\n{}",
-            &title,
-            &constraints,
+            title,
+            constraints,
             markdown::html_to_md(&body.html())
         );
 

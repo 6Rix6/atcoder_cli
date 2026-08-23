@@ -25,12 +25,12 @@ pub fn get_task_info(id_or_url: &str) -> Option<TaskInfo> {
 
     let url = format!(
         "{}/contests/{}/tasks/{}",
-        ATCODER_BASE_URL, &contest_id, &task_id
+        ATCODER_BASE_URL, contest_id, task_id
     );
 
     let submit_url = format!(
         "{}/contests/{}/submit?taskScreenName={}",
-        ATCODER_BASE_URL, &contest_id, &task_id
+        ATCODER_BASE_URL, contest_id, task_id
     );
 
     let info = TaskInfo {
