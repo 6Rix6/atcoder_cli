@@ -31,6 +31,10 @@ pub struct SetupArgs {
     /// Also download problem statements as Markdown into each problem directory
     #[arg(long)]
     pub md: bool,
+
+    /// Replace MathJax-specific alias commands (e.g. \lt, \gt) with standard TeX
+    #[arg(short, long)]
+    pub replace_mathjax: bool,
 }
 
 /// Effective `[setup]` parameters resolved from a config and a language preset.
@@ -102,7 +106,16 @@ pub fn run(args: &SetupArgs) -> Result<Outcome, AppError> {
     }
     println!();
 
-    if args.md && !download_statements(&client, &contest_dir, &plan, &tasks, &mut stats)? {
+    if args.md
+        && !download_statements(
+            &client,
+            &contest_dir,
+            &plan,
+            &tasks,
+            &mut stats,
+            args.replace_mathjax,
+        )?
+    {
         failed_ln!("Setup finished with errors: no problem statements could be downloaded");
         return Ok(Outcome::Failed);
     }
@@ -264,6 +277,7 @@ fn download_statements(
     plan: &SetupPlan,
     tasks: &[TaskInfo],
     stats: &mut Stats,
+    replace_mathjax: bool,
 ) -> Result<bool, AppError> {
     let mut downloaded = 0;
 
@@ -280,7 +294,7 @@ fn download_statements(
         }
 
         info_ln!("Fetching statement for {}...", task.task_id);
-        match client.get_page(&task.url) {
+        match client.get_page(&task.url, replace_mathjax) {
             Ok(page) => {
                 std::fs::write(&md_path, page.problem_md)?;
                 downloaded += 1;

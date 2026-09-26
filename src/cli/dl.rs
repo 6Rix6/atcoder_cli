@@ -17,6 +17,10 @@ pub struct DlArgs {
     /// Output file path (writes to stdout when omitted)
     #[arg(short, long, value_name = "FILE")]
     pub output: Option<PathBuf>,
+
+    /// Replace MathJax-specific alias commands (e.g. \lt, \gt) with standard TeX
+    #[arg(short, long)]
+    pub replace_mathjax: bool,
 }
 
 pub fn download(args: &DlArgs) -> Result<Outcome, AppError> {
@@ -27,7 +31,7 @@ pub fn download(args: &DlArgs) -> Result<Outcome, AppError> {
     let cookie = utils::session_cookie()?;
 
     let client = AtCoderClient::new(cookie);
-    let page = client.get_page(&task_info.url)?;
+    let page = client.get_page(&task_info.url, args.replace_mathjax)?;
 
     match &args.output {
         Some(path) => {

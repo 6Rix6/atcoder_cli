@@ -58,7 +58,7 @@ impl AtCoderClient {
     pub fn get_task(&self, url: &str) -> Result<TaskData, AtcoderError> {
         let html = self.fetch_html(url)?;
         let parser = Parser::new(&html);
-        let page = parser.page().ok_or_else(|| AtcoderError::Parse {
+        let page = parser.page(false).ok_or_else(|| AtcoderError::Parse {
             url: url.to_string(),
         })?;
 
@@ -69,11 +69,11 @@ impl AtCoderClient {
     }
 
     /// Fetch a problem page and extract its metadata.
-    pub fn get_page(&self, url: &str) -> Result<TaskPage, AtcoderError> {
+    pub fn get_page(&self, url: &str, replace_mathjax: bool) -> Result<TaskPage, AtcoderError> {
         let html = self.fetch_html(url)?;
 
         Parser::new(&html)
-            .page()
+            .page(replace_mathjax)
             .ok_or_else(|| AtcoderError::Parse {
                 url: url.to_string(),
             })

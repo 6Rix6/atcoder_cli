@@ -1,4 +1,5 @@
 use html2md::{Handle, NodeData, StructuredPrinter, TagHandler, TagHandlerFactory};
+use crate::atcoder::markdown::tex;
 
 pub struct PreHandler;
 
@@ -20,12 +21,19 @@ impl TagHandlerFactory for PreHandlerFactory {
     }
 }
 
-pub struct VarHandler;
+pub struct VarHandler {
+    replace_mathjax: bool,
+}
 
 impl TagHandler for VarHandler {
     fn handle(&mut self, tag: &html2md::Handle, printer: &mut html2md::StructuredPrinter) {
         printer.append_str("$");
-        printer.append_str(&extract_text(tag));
+        let text = extract_text(tag);
+        if self.replace_mathjax {
+            printer.append_str(&tex::replace_mathjax_aliases(&text));
+        }else{
+        printer.append_str(&text);
+        }
     }
 
     fn after_handle(&mut self, printer: &mut html2md::StructuredPrinter) {
@@ -37,11 +45,15 @@ impl TagHandler for VarHandler {
     }
 }
 
-pub struct VarHandlerFactory;
+pub struct VarHandlerFactory{
+    pub replace_mathjax: bool,
+}
 
 impl TagHandlerFactory for VarHandlerFactory {
     fn instantiate(&self) -> Box<dyn TagHandler> {
-        Box::new(VarHandler {})
+        Box::new(VarHandler {
+            replace_mathjax: self.replace_mathjax,
+        })
     }
 }
 

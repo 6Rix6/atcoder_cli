@@ -106,7 +106,7 @@ impl Parser {
         samples
     }
 
-    pub fn page(&self) -> Option<TaskPage> {
+    pub fn page(&self, replace_mathjax: bool) -> Option<TaskPage> {
         let container = self.get_main_container()?;
         let body = self.get_task_statement(TaskLanguage::Japanese)?;
 
@@ -128,7 +128,7 @@ impl Parser {
             "## {}\n{}\n\n{}",
             title,
             constraints,
-            markdown::html_to_md(&body.html())
+            markdown::html_to_md(&body.html(),replace_mathjax)
         );
 
         Some(TaskPage {
@@ -338,7 +338,7 @@ mod tests {
     #[test]
     fn parses_page_metadata() {
         let parser = Parser::new(JA_PROBLEM_HTML);
-        let page = parser.page().expect("page should be parsed");
+        let page = parser.page(false).expect("page should be parsed");
 
         assert_eq!(page.title, "A - Past ABCs");
         assert_eq!(page.time_limit, 2);
@@ -349,7 +349,7 @@ mod tests {
     #[test]
     fn page_is_none_without_main_container() {
         let parser = Parser::new("<html><body><p>hello</p></body></html>");
-        assert!(parser.page().is_none());
+        assert!(parser.page(false).is_none());
         assert!(parser.samples().is_empty());
     }
 
@@ -365,7 +365,7 @@ mod tests {
 "#;
 
         let parser = Parser::new(html);
-        let page = parser.page().expect("page should be parsed");
+        let page = parser.page(false).expect("page should be parsed");
 
         assert_eq!(page.time_limit, 2);
         assert_eq!(page.memory_limit, 1024);
