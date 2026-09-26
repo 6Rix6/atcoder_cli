@@ -1,4 +1,4 @@
-use html2md::{Handle, NodeData, StructuredPrinter, TagHandler, TagHandlerFactory};
+use html2md::{Handle, NodeData, StructuredPrinter, TagHandler, TagHandlerFactory, common};
 use crate::atcoder::markdown::tex;
 
 pub struct PreHandler;
@@ -77,6 +77,34 @@ pub struct H3HandlerFactory;
 impl TagHandlerFactory for H3HandlerFactory {
     fn instantiate(&self) -> Box<dyn TagHandler> {
         Box::new(H3Handler {})
+    }
+}
+
+#[derive(Default)]
+pub struct SpanHandler {
+    hidden: bool,
+}
+
+impl TagHandler for SpanHandler {
+    fn handle(&mut self, tag: &Handle, _printer: &mut StructuredPrinter) {
+        self.hidden = common::get_tag_attr(tag, "aria-hidden")
+            .map(|v| v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+    }
+
+    fn after_handle(&mut self, _printer: &mut StructuredPrinter) {
+    }
+
+    fn skip_descendants(&self) -> bool {
+        self.hidden
+    }
+}
+
+pub struct SpanHandlerFactory;
+
+impl TagHandlerFactory for SpanHandlerFactory {
+    fn instantiate(&self) -> Box<dyn TagHandler> {
+        Box::new(SpanHandler::default())
     }
 }
 

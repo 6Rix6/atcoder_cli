@@ -128,7 +128,7 @@ impl Parser {
             "## {}\n{}\n\n{}",
             title,
             constraints,
-            markdown::html_to_md(&body.html(),replace_mathjax)
+            markdown::html_to_md(&body.html(), replace_mathjax)
         );
 
         Some(TaskPage {
@@ -351,6 +351,24 @@ mod tests {
         let parser = Parser::new("<html><body><p>hello</p></body></html>");
         assert!(parser.page(false).is_none());
         assert!(parser.samples().is_empty());
+    }
+
+    #[test]
+    fn parse_page_ignore_hidden_span() {
+        let html = r#"
+        <html><body>
+<div id="main-container">
+  <span class="h2">A</span>
+  <div id="task-statement"><span class="lang-ja">
+    <span aria-hidden="true">Hidden text</span>
+  </span></div>
+</div>
+</body></html>
+"#;
+        let parser = Parser::new(html);
+        let page = parser.page(false).expect("page should be parsed");
+
+        assert_eq!(page.problem_md.trim(), "## A");
     }
 
     #[test]
