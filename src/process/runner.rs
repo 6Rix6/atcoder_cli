@@ -26,7 +26,11 @@ pub enum RunError {
     Timeout { duration: Duration },
 
     #[error("Process exited with non-zero status: {status}\n{stderr}")]
-    RuntimeError { status: ExitStatus, stderr: String },
+    RuntimeError {
+        status: ExitStatus,
+        stderr: String,
+        duration: Duration,
+    },
 }
 
 /// Runs the executable with the given input, using GNU time if provided.
@@ -157,6 +161,7 @@ pub fn run_case(
         return Err(RunError::RuntimeError {
             status: final_status,
             stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+            duration: start_time.elapsed(),
         });
     }
 

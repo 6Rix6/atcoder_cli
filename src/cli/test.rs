@@ -1,6 +1,7 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, time::Duration};
 
 use clap::Args;
+use serde::Serialize;
 
 use crate::{
     atcoder::{
@@ -10,11 +11,11 @@ use crate::{
     },
     cli::{
         Outcome,
-        styles::{self, ERROR_PREFIX, SUCCESS_PREFIX, spinner::Spinner},
+        event::{self, CliEvent, CommonEvent, Level, Task},
+        styles,
         template::expand_template,
         utils,
     },
-    config::models::Config,
     error::AppError,
     process::{
         compiler,
@@ -30,15 +31,164 @@ pub struct TestArgs {
     pub task_id: String,
 }
 
+#[derive(Serialize, Clone, Copy, PartialEq)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum Verdict {
+    Ac,
+    Wa,
+    Re,
+    Tle,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "event", content = "data", rename_all = "snake_case")]
+pub enum TestEvent {
+    TestStarted {
+        task_id: String,
+        url: String,
+    },
+    TestFinished {
+        total: u32,
+        passed: u32,
+        submit_url: String,
+    },
+    TestCaseStarted {
+        index: u32,
+    },
+    TestCaseResult {
+        index: u32,
+        verdict: Verdict,
+        #[serde(with = "utils::serde_format::duration_ms_f64", rename = "time_ms")]
+        time: Duration,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        memory_mb: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        expected: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        actual: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        exit_code: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        log: Option<String>,
+    },
+    TestCaseFailed {
+        error: String,
+    },
+    CompileStarted {
+        command: String,
+    },
+    CompileFinished {
+        success: bool,
+    },
+}
+
+impl CliEvent for TestEvent {
+    fn print_human(&self) {
+        match self {
+            TestEvent::TestStarted { task_id, .. } => {
+                success_ln!("Running for task: {}", styles::success(task_id));
+            }
+            TestEvent::TestFinished {
+                total,
+                passed,
+                submit_url,
+            } => {
+                if total == passed {
+                    success_ln!("Test {}", styles::success("succeeded"));
+                    info_ln!("Submit here: {}", submit_url);
+                } else {
+                    failed_ln!(
+                        "Test {}: {}/{} passed",
+                        styles::error("failed"),
+                        passed,
+                        total
+                    );
+                }
+            }
+            TestEvent::TestCaseStarted { index } => {
+                info_ln!("Sample #{}", index);
+            }
+            TestEvent::TestCaseResult {
+                verdict: Verdict::Ac,
+                time,
+                memory_mb,
+                ..
+            } => {
+                info_ln!("time: {}", styles::dim(&format!("{:?}", time)));
+                if let Some(data) = memory_mb {
+                    info_ln!("memory: {}", styles::dim(&format!("{:.3}mb", data)));
+                }
+                success_ln!("{}", styles::success("AC"));
+            }
+            TestEvent::TestCaseResult {
+                verdict: Verdict::Wa,
+                time,
+                memory_mb,
+                expected,
+                actual,
+                ..
+            } => {
+                info_ln!("time: {}", styles::dim(&format!("{:?}", time)));
+                if let Some(data) = memory_mb {
+                    info_ln!("memory: {}", styles::dim(&format!("{:.3}mb", data)));
+                }
+                failed_ln!("{}", styles::warn("WA"));
+                println!(
+                    "{}:\n{}",
+                    styles::dim("Expected"),
+                    expected.as_deref().unwrap_or_default()
+                );
+                println!(
+                    "{}:\n{}",
+                    styles::dim("Actual"),
+                    actual.as_deref().unwrap_or_default()
+                );
+            }
+            TestEvent::TestCaseResult {
+                verdict: Verdict::Tle,
+                time,
+                ..
+            } => {
+                info_ln!("time: {}", styles::dim(&format!("{:?}", time)));
+                failed_ln!("{} (Time Limit Exceeded)", styles::error("TLE"));
+            }
+            TestEvent::TestCaseResult {
+                verdict: Verdict::Re,
+                exit_code,
+                log,
+                ..
+            } => {
+                failed_ln!("{} (Runtime Error)", styles::error("RE"));
+                println!(
+                    "{}:\n  {}",
+                    styles::dim("Exit Code"),
+                    exit_code.as_deref().unwrap_or_default()
+                );
+                let log_text = log.as_deref().unwrap_or_default();
+                if !log_text.is_empty() {
+                    println!("{}:\n  {}", styles::dim("Log"), log_text);
+                }
+            }
+            TestEvent::TestCaseFailed { .. } => {
+                error_ln!("System Error (Could not run the binary)");
+            }
+            TestEvent::CompileStarted { .. } | TestEvent::CompileFinished { .. } => {}
+        }
+    }
+}
+
 /// Handler for 'acc test <task_id>'
 pub fn run(args: &TestArgs) -> Result<Outcome, AppError> {
     let Some(task_info) = atcoder::utils::get_task_info(&args.task_id) else {
         return Err(AppError::InvalidTask(args.task_id.clone()));
     };
 
-    success_ln!("Running for task: {}", styles::success(&task_info.task_id));
+    event::emit(&TestEvent::TestStarted {
+        task_id: task_info.task_id.clone(),
+        url: task_info.url.clone(),
+    });
 
-    let config = load_config()?.ok_or(AppError::NoConfig)?;
+    let config = utils::load_config()?.ok_or(AppError::NoConfig)?;
 
     let vars = task_info.to_map();
 
@@ -47,7 +197,7 @@ pub fn run(args: &TestArgs) -> Result<Outcome, AppError> {
         compile(compiler_template, flags, &vars)?;
     }
 
-    let cookie = utils::session_cookie()?;
+    let cookie = utils::cookie::session_cookie()?;
     let data = fetch_task_data(&task_info.url, cookie)?;
 
     if data.samples.is_empty() {
@@ -57,14 +207,17 @@ pub fn run(args: &TestArgs) -> Result<Outcome, AppError> {
         .into());
     }
 
-    println!();
+    event::emit_empty_ln();
 
     let gnu_time_path = get_gnu_time_path();
     if gnu_time_path.is_none() {
-        warn_ln!("GNU time is not available. Memory usage will not be measured.");
+        event::emit(&CommonEvent::Log {
+            level: Level::Warn,
+            message: String::from("GNU time is not available. Memory usage will not be measured."),
+        });
     }
 
-    println!();
+    event::emit_empty_ln();
 
     let mut passed = 0;
     let run_command = expand_template(&config.run, &vars);
@@ -89,17 +242,16 @@ pub fn run(args: &TestArgs) -> Result<Outcome, AppError> {
         }
     }
 
-    if passed == data.samples.len() {
-        success_ln!("Test {}", styles::success("succeeded"));
-        info_ln!("Submit here: {}", &task_info.submit_url);
+    let total: u32 = data.samples.len() as u32;
+    event::emit(&TestEvent::TestFinished {
+        total,
+        passed,
+        submit_url: String::from(&task_info.submit_url),
+    });
+
+    if passed == total {
         Ok(Outcome::Success)
     } else {
-        failed_ln!(
-            "Test {}: {}/{} passed",
-            styles::error("failed"),
-            passed,
-            data.samples.len()
-        );
         Ok(Outcome::Failed)
     }
 }
@@ -115,26 +267,33 @@ fn compile(
     compiler_flags: &[String],
     vars: &BTreeMap<&str, &str>,
 ) -> Result<(), AppError> {
-    let spinner = Spinner::new("Compiling source...");
-
     let compiler_command = expand_template(compiler_template, vars);
     let compiler_flags: Vec<String> = compiler_flags
         .iter()
         .map(|f| expand_template(f, vars))
         .collect();
 
+    let task = Task::start(
+        &TestEvent::CompileStarted {
+            command: format!("{} {}", compiler_command, compiler_flags.join(" ")),
+        },
+        "Compiling source...",
+    );
+
     match compiler::compile(&compiler_command, &compiler_flags) {
         Ok(()) => {
-            spinner.finish(
-                &format!("{}", styles::success(SUCCESS_PREFIX)),
+            task.finish_ok(
+                &TestEvent::CompileFinished { success: true },
+                None,
                 "Compile finished.",
             );
             Ok(())
         }
         Err(e) => {
-            spinner.finish(
-                &format!("{}", styles::error(ERROR_PREFIX)),
-                &format!("Compile failed ({}): ", styles::error("CE")),
+            task.finish_err(
+                &TestEvent::CompileFinished { success: false },
+                Some("CE"),
+                "Failed to compile source.",
             );
             Err(e.into())
         }
@@ -143,12 +302,21 @@ fn compile(
 
 fn fetch_task_data(url: &str, cookie: Option<String>) -> Result<TaskData, AppError> {
     let client = AtCoderClient::new(cookie);
-    let spinner = Spinner::new("Fetching samples...");
+    let task = Task::start(
+        &CommonEvent::FetchStarted {
+            url: String::from(url),
+        },
+        "Fetching samples...",
+    );
 
     match client.get_task(url) {
         Ok(val) => {
-            spinner.finish(
-                &format!("{}", styles::success("200 OK")),
+            task.finish_ok(
+                &CommonEvent::FetchFinished {
+                    success: true,
+                    status_code: Some(String::from("200")),
+                },
+                Some("200 OK"),
                 &format!("{} sample(s) fetched.", val.samples.len()),
             );
             Ok(val)
@@ -157,11 +325,17 @@ fn fetch_task_data(url: &str, cookie: Option<String>) -> Result<TaskData, AppErr
             let code = e
                 .as_http()
                 .and_then(|http| http.status())
-                .map_or_else(|| String::from(ERROR_PREFIX), |s| s.to_string());
-            spinner.finish(
-                &format!("{}", styles::error(&code)),
-                "Failed to fetch samples:",
+                .map(|s| s.to_string());
+
+            task.finish_err(
+                &CommonEvent::FetchFinished {
+                    success: false,
+                    status_code: code.clone(),
+                },
+                code.as_deref(),
+                "Failed to fetch samples.",
             );
+
             Err(e.into())
         }
     }
@@ -178,10 +352,12 @@ fn execute_test_case(
     gnu_time: Option<&str>,
     time_limit_secs: u32,
 ) -> Result<bool, AppError> {
-    info_ln!("Sample #{}", case_num);
+    event::emit(&TestEvent::TestCaseStarted {
+        index: case_num as u32,
+    });
     let mut is_ac = false;
 
-    match runner::run_case(
+    let result_event: TestEvent = match runner::run_case(
         run_command,
         run_flags,
         &sample.input,
@@ -189,44 +365,64 @@ fn execute_test_case(
         time_limit_secs,
     ) {
         Ok(result) => {
-            info_ln!("time: {}", styles::dim(&format!("{:?}", result.duration)));
-
-            if let Some(memory_mb) = result.memory_mb {
-                info_ln!("memory: {}", styles::dim(&format!("{:.3}mb", memory_mb)));
-            }
-
-            if compare_lines_trimmed(&result.output, &sample.output) {
-                success_ln!("{}", styles::success("AC"));
-                is_ac = true;
+            let verdict = if compare_lines_trimmed(&result.output, &sample.output) {
+                Verdict::Ac
             } else {
-                failed_ln!("{}", styles::warn("WA"));
-                println!("{}:\n{}", styles::dim("Expected"), sample.output);
-                println!("{}:\n{}", styles::dim("Actual"), result.output);
+                Verdict::Wa
+            };
+            is_ac = verdict == Verdict::Ac;
+
+            TestEvent::TestCaseResult {
+                index: case_num as u32,
+                verdict,
+                time: result.duration,
+                memory_mb: result.memory_mb,
+                expected: Some(sample.output.clone()),
+                actual: Some(result.output),
+                exit_code: None,
+                log: None,
             }
         }
         Err(RunError::Timeout { duration }) => {
-            info_ln!("time: {}", styles::dim(&format!("{:?}", duration)));
-            failed_ln!("{} (Time Limit Exceeded)", styles::error("TLE"));
+            TestEvent::TestCaseResult {
+                index: case_num as u32,
+                verdict: Verdict::Tle,
+                time: duration,
+                memory_mb: None,
+                expected: Some(sample.output.clone()),
+                actual: None,
+                exit_code: None,
+                log: None,
+            }
         }
-        Err(RunError::RuntimeError { status, stderr }) => {
-            failed_ln!("{} (Runtime Error)", styles::error("RE"));
-            println!("{}:\n  {}", styles::dim("Exit Code"), status);
-            if !stderr.is_empty() {
-                println!("{}:\n  {}", styles::dim("Log"), stderr);
+        Err(RunError::RuntimeError {
+            status,
+            stderr,
+            duration,
+        }) => {
+            TestEvent::TestCaseResult {
+                index: case_num as u32,
+                verdict: Verdict::Re,
+                time: duration,
+                memory_mb: None,
+                expected: Some(sample.output.clone()),
+                actual: None,
+                exit_code: Some(status.to_string()),
+                log: Some(stderr),
             }
         }
         Err(RunError::StartFailed(source)) => {
-            error_ln!("System Error (Could not run the binary)");
+            event::emit(&TestEvent::TestCaseFailed {
+                error: source.to_string(),
+            });
+
             return Err(source.into());
         }
-    }
+    };
 
-    println!();
+    event::emit(&result_event);
+    event::emit_empty_ln();
     Ok(is_ac)
-}
-
-fn load_config() -> Result<Option<Config>, AppError> {
-    utils::load_config()
 }
 
 #[cfg(test)]
@@ -237,7 +433,6 @@ mod tests {
     fn compares_lines_ignoring_whitespace() {
         assert!(compare_lines_trimmed("1 2\n3", "1 2\n3"));
         assert!(compare_lines_trimmed("1 2  \n\t3 \n", "1 2\n3"));
-        // 行末改行の有無は等価
         assert!(compare_lines_trimmed("a\nb", "a\nb\n"));
         assert!(!compare_lines_trimmed("a\nb", "a\nc"));
         assert!(!compare_lines_trimmed("a\nb", "ab"));

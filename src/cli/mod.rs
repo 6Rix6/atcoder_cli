@@ -8,6 +8,7 @@ use crate::error::AppError;
 #[macro_use]
 mod styles;
 
+mod event;
 mod utils;
 
 pub mod auth;
@@ -33,6 +34,9 @@ pub enum Outcome {
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
+
+    #[arg(long, global = true)]
+    json: bool,
 }
 
 #[derive(Subcommand, Debug)]
@@ -61,6 +65,8 @@ pub enum Commands {
 ///
 /// Errors bubble up to `main`, which prints them and selects the exit code.
 pub fn run(cli: &Cli) -> Result<Outcome, AppError> {
+    let _ = event::set_is_json(cli.json);
+
     match &cli.command {
         Commands::Test(args) => test::run(args),
         Commands::Auth(args) => auth::handle(args),
@@ -82,7 +88,7 @@ pub fn report_error(err: &AppError) {
         source = s.source();
     }
 
-    eprintln!("[{}] {}", styles::error(styles::ERROR_PREFIX), text);
+    event::emit(&event::CommonEvent::Error { message: text });
 }
 
 /// Returns an error when no interactive terminal is available.

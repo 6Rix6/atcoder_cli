@@ -94,7 +94,7 @@ pub fn run(args: &SetupArgs) -> Result<Outcome, AppError> {
     };
     let contest_dir = base_dir.join(&contest_id);
 
-    let cookie = utils::session_cookie()?;
+    let cookie = utils::cookie::session_cookie()?;
     let client = AtCoderClient::new(cookie);
 
     let tasks = fetch_task_list(&client, &contest_id)?;
